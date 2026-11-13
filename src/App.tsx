@@ -32,6 +32,7 @@ import {
   Type,
   Heart,
   Layers,
+  Printer,
   LoaderCircle,
 } from "lucide-react";
 type Page = {
@@ -611,6 +612,14 @@ export default function App() {
                       <Download size={16} />
                       Export
                     </button>
+                    <a
+                      href={`${API}${base}/print-preview`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Printer size={16} />
+                      Open print preview
+                    </a>
                     <button onClick={() => setModal("password")}>
                       <Shield size={16} />
                       Protect with password

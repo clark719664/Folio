@@ -371,3 +371,9 @@ try:
 except ImportError:
     from accessibility import register as register_accessibility
 register_accessibility(app, location, open_document, describe, persist, LOCK)
+
+try:
+    from .production import register as register_production
+except ImportError:
+    from production import register as register_production
+register_production(app, location, open_document, describe, persist, LOCK)

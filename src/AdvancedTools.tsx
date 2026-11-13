@@ -2,6 +2,8 @@ import { useDialog } from "./useDialog";
 import SignaturePad from "./SignaturePad";
 import ReviewTools from "./ReviewTools";
 import AccessibilityTools from "./AccessibilityTools";
+import PrintTools from "./PrintTools";
+import ProductionTools from "./ProductionTools";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
@@ -18,6 +20,7 @@ import {
   X,
   Paperclip,
   Columns2,
+  Printer,
 } from "lucide-react";
 
 type Field = {
@@ -45,6 +48,18 @@ type Props = {
   onPageChange: (page: number) => void;
 };
 const items = [
+  {
+    id: "production",
+    label: "Print production",
+    description: "Inspect fonts, images, boxes and output profiles",
+    icon: ScanText,
+  },
+  {
+    id: "print",
+    label: "Print",
+    description: "Original pages, multiple pages or booklets",
+    icon: Printer,
+  },
   {
     id: "accessibility",
     label: "Accessibility",
@@ -503,6 +518,17 @@ export default function AdvancedTools({
           </div>
         ) : (
           <div className="tool-content">
+            {view === "production" && (
+              <ProductionTools
+                documentId={doc.id}
+                page={page}
+                busy={busy}
+                mutate={mutate}
+              />
+            )}
+            {view === "print" && (
+              <PrintTools documentId={doc.id} pageCount={doc.pageCount} />
+            )}
             {view === "accessibility" && (
               <AccessibilityTools
                 documentId={doc.id}

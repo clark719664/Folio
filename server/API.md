@@ -127,3 +127,17 @@ Each tree node has `path` (revision-scoped child indices), `role`, `alt`, `actua
 POST the same endpoint returns a new document revision. Accepted bodies are `{operation:"document",language?,title?}`, `{operation:"element",path,role?,alt?,actualText?,language?}`, and `{operation:"reorder",path,order}`. Element paths must identify existing structure elements. Roles must be standard PDF 1.7 roles or present in the current RoleMap. Reordering requires every immediate /K child index once, including content children. Parent path `[]` refers to StructTreeRoot. ParentTree and MCID associations remain intact. Unsupported paths/orders fail before persistence. Reading order changes semantics only, leaving page drawing operations intact.
 
 GET `/api/documents/{id}/accessibility/report` downloads the inspection as JSON. Untagged PDFs support title/language correction but require future tagging implementation before structure controls can be used. Existing signed PDFs are rewritten by these mutations and signatures require revalidation.
+
+## Print production
+
+GET `/documents/{id}/production` returns page boxes (points), rotation, referenced fonts and embedding status, image placements/colorspaces/bit depths and effective horizontal/vertical DPI. Image colorspace reporting does not inspect all vector color operators, separations or overprint.
+
+POST `/documents/{id}/preflight` accepts a JSON profile `{name,rules}`. Rule kinds are `font-embedded`, `minimum-image-dpi` (`minimumDpi`), `allowed-image-colorspaces` (`allowedColorspaces`), `document-title`, `maximum-page-size` (`width`,`height`), and `page-boxes`. Response echoes the profile, actionable `findings` with rule index/page/xref as relevant, `passed` for configured rules, `scope:"configured-rules-only"`, `conformanceCertified:false`. Profiles can be exported/imported as this JSON schema. Full PDF/A, PDF/X and PDF/E validation requires an independent standards validator.
+
+POST `/documents/{id}/boxes` accepts `{pages:[zeroBasedIndices],media?,crop?,bleed?,trim?,art?}`. Each supplied rectangle is four finite point coordinates. The operation returns a new revision and leaves drawing streams intact; box changes can alter visible clipping.
+
+POST `/documents/{id}/output-intent` accepts `{profile:base64ICC,identifier,description?,subtype:"GTS_PDFX"|"GTS_PDFA1"}`. The ICC header and LittleCMS parser validate the supplied profile. A new revision contains the profile output intent. This declares intended color reproduction and can affect viewer color interpretation, while drawing streams stay intact. It does not convert existing colors or certify PDF conformance.
+
+POST `/documents/{id}/impose` accepts `{mode:"nup"|"booklet",pages?,columns?,rows?,width?,height?,margin?,gutter?,rightToLeft?,borders?,includeAnnotations?}`. Defaults are two columns/two rows on 842x595pt sheets, 18pt margins and 12pt gutter. Booklet uses two-up front/back ordering with blank padding to a multiple of four. Response is a new PDF descriptor plus `sheets` containing zero-based original page indices and null blanks. Text and vectors remain printable PDF content. By default annotations and form appearances are baked into the imposed output; interactive fields/links are not transferred. Originals remain intact. Booklets need duplex printing with appropriate short-edge orientation, checked on the target printer.
+
+GET `/documents/{id}/print-preview` serves the PDF inline for the browser's print workflow. Physical printer output and printer-specific orientation remain manual acceptance checks.

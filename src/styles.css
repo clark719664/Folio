@@ -1391,3 +1391,45 @@ textarea {
   gap: 6px;
   margin: 10px 0;
 }
+.print-link {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-decoration: none;
+}
+.print-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+.print-grid label {
+  display: grid;
+  gap: 6px;
+}
+.print-result {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+.preflight-rule {
+  margin: 8px 0;
+}
+.preflight-rule > label:not(.checkbox-label) {
+  display: grid;
+  gap: 6px;
+  margin-left: 24px;
+}
+.tool-content details {
+  margin: 16px 0;
+}
+.tool-content summary {
+  cursor: pointer;
+  font-weight: 500;
+  padding: 8px 0;
+}
+.tool-content details label {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
