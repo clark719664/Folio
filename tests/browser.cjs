@@ -31,7 +31,9 @@ execFileSync(path.join(root, "server/.venv/Scripts/python.exe"), [
     .first()
     .setInputFiles(path.join(__dirname, "sample.pdf"));
   await page
-    .getByRole("button", { name: "Hello Folio", exact: true })
+    .locator(
+      '[aria-label="Hello Folio"], .pdf-text-layer span:text-is("Hello Folio")',
+    )
     .waitFor();
   await page.getByRole("button", { name: "Edit text", exact: true }).click();
   await page.getByRole("button", { name: "Hello Folio", exact: true }).click();
@@ -49,7 +51,9 @@ execFileSync(path.join(root, "server/.venv/Scripts/python.exe"), [
   await page.getByRole("button", { name: "Apply change" }).click();
   assert.equal((await rejected).status(), 422);
   await page
-    .getByRole("button", { name: "Hello Folio", exact: true })
+    .locator(
+      '[aria-label="Hello Folio"], .pdf-text-layer span:text-is("Hello Folio")',
+    )
     .waitFor();
   await page.getByRole("textbox", { name: "Selected text" }).fill("Hello Free");
   const saved = page.waitForResponse(
@@ -68,18 +72,30 @@ execFileSync(path.join(root, "server/.venv/Scripts/python.exe"), [
   ).json();
   assert.match(content.text, /Hello Free/);
   assert.doesNotMatch(content.text, /Hello Folio/);
-  await page.getByRole("button", { name: "Hello Free", exact: true }).waitFor();
+  await page
+    .locator(
+      '[aria-label="Hello Free"], .pdf-text-layer span:text-is("Hello Free")',
+    )
+    .waitFor();
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await page
-    .getByRole("button", { name: "Hello Folio", exact: true })
+    .locator(
+      '[aria-label="Hello Folio"], .pdf-text-layer span:text-is("Hello Folio")',
+    )
     .waitFor();
   await page.getByRole("button", { name: "Redo", exact: true }).click();
-  await page.getByRole("button", { name: "Hello Free", exact: true }).waitFor();
+  await page
+    .locator(
+      '[aria-label="Hello Free"], .pdf-text-layer span:text-is("Hello Free")',
+    )
+    .waitFor();
   await page.getByRole("button", { name: "Search document" }).click();
   await page.getByRole("textbox", { name: "Find in document" }).fill("Second");
   await page.getByRole("button", { name: /Page 2 Second page/ }).click();
   await page
-    .getByRole("button", { name: "Second page", exact: true })
+    .locator(
+      '[aria-label="Second page"], .pdf-text-layer span:text-is("Second page")',
+    )
     .waitFor();
   await page.getByRole("button", { name: "Close search" }).click();
   await page.getByRole("button", { name: "Previous page" }).click();

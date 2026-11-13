@@ -1,3 +1,5 @@
+import SharedWorkspace from "./SharedWorkspace";
+import TextLayer from "./TextLayer";
 import { useAppearance } from "./appearance";
 import { useDialog } from "./useDialog";
 import AdvancedTools from "./AdvancedTools";
@@ -58,12 +60,15 @@ type Span = {
   font: string;
   size: number;
   color: number;
+  block?: number;
+  line?: number;
 };
 type Tool = "read" | "text" | "highlight" | "note" | "redact";
 const API = "/api";
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(API + url, options);
   if (!response.ok) {
+    if (response.status === 401) window.dispatchEvent(new Event("folio-auth-required"));
     const body = await response
       .json()
       .catch(() => ({ detail: response.statusText }));
@@ -122,6 +127,16 @@ function spanStyle(span: Span, page: Page) {
 export default function App() {
   const [doc, setDoc] = useState<DocumentInfo | null>(null);
   const documentLoad = useRef(0);
+  const [authenticationVersion, setAuthenticationVersion] = useState(0);
+  useEffect(() => {
+    const signIn = () => setShared(true);
+    const authenticated = () => setAuthenticationVersion(value => value + 1);
+    const clearLocal = () => { setDoc(null); setHistory([]); setFuture([]); setSpans([]); clearSession(); };
+    window.addEventListener("folio-auth-required", signIn);
+    window.addEventListener("folio-local-session-ended", clearLocal);
+    window.addEventListener("folio-owner-authenticated", authenticated);
+    return () => { window.removeEventListener("folio-auth-required", signIn); window.removeEventListener("folio-local-session-ended", clearLocal); window.removeEventListener("folio-owner-authenticated", authenticated); };
+  }, []);
   const [history, setHistory] = useState<DocumentInfo[]>([]);
   const [future, setFuture] = useState<DocumentInfo[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
@@ -141,10 +156,12 @@ export default function App() {
   const [appearance, setAppearance] = useAppearance();
   const [advanced, setAdvanced] = useState(false);
   const [library, setLibrary] = useState(false);
+  const [shared, setShared] = useState(() => new URLSearchParams(location.search).has("invite"));
   const [modal, setModal] = useState<
     "properties" | "password" | "unlock" | "export" | null
   >(null);
   const [password, setPassword] = useState("");
+  const [lockedDocumentId, setLockedDocumentId] = useState<string | null>(null);
   const [ownerPassword, setOwnerPassword] = useState("");
   const [permissions, setPermissions] = useState([
     "print",
@@ -182,6 +199,7 @@ export default function App() {
       .then((next) => {
         if (load !== documentLoad.current) return;
         setDoc(next);
+        setError("");
         setPageIndex(Math.min(saved.page, Math.max(0, next.pageCount - 1)));
         setZoom(saved.zoom);
         setFitWidth(saved.fitWidth);
@@ -199,7 +217,7 @@ export default function App() {
           );
       });
     return () => controller.abort();
-  }, []);
+  }, [authenticationVersion]);
   useEffect(() => {
     if (doc)
       writeSession({ documentId: doc.id, page: pageIndex, zoom, fitWidth });
@@ -212,7 +230,7 @@ export default function App() {
       const paperWidth = page.rotation % 180 ? page.height : page.width;
       setZoom(
         Math.min(
-          1,
+          3,
           Math.max(0.15, (element.clientWidth - padding) / paperWidth),
         ),
       );
@@ -275,6 +293,7 @@ export default function App() {
   }, [notice]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      if (document.querySelector(".shared-workspace")) return;
       if ((e.ctrlKey || e.metaKey) && e.key === "o") {
         e.preventDefault();
         input.current?.click();
@@ -326,7 +345,19 @@ export default function App() {
   async function openSaved(documentId: string) {
     documentLoad.current++;
     return perform("Opening document", async () => {
-      const next = await request<DocumentInfo>(`/documents/${documentId}`);
+      let next: DocumentInfo;
+      try {
+        next = await request<DocumentInfo>(`/documents/${documentId}`);
+      } catch (error) {
+        if ((error as { status?: number }).status === 423) {
+          setLockedDocumentId(documentId);
+          setPassword("");
+          setLibrary(false);
+          setModal("unlock");
+          return;
+        }
+        throw error;
+      }
       setDoc(next);
       setHistory([]);
       setFuture([]);
@@ -351,8 +382,31 @@ export default function App() {
     body.append("password", filePassword);
     return request("/documents", { method: "POST", body });
   }
+  function unlockSaved() {
+    if (!lockedDocumentId) return;
+    perform("Opening document", async () => {
+      const next = await request<DocumentInfo>(
+        `/documents/${lockedDocumentId}/unlock`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        },
+      );
+      setDoc(next);
+      setHistory([]);
+      setFuture([]);
+      setPageIndex(0);
+      setTool("read");
+      setSelected(null);
+      setModal(null);
+      setPassword("");
+      setLockedDocumentId(null);
+    });
+  }
   function open(file?: File, filePassword = "") {
     if (!file) return;
+    setLockedDocumentId(null);
     documentLoad.current++;
     perform("Opening document", async () => {
       try {
@@ -465,10 +519,48 @@ export default function App() {
   }
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || !doc || busy) return;
+      if (document.querySelector(".shared-workspace")) return;
+      if (!doc || busy) return;
       const editable =
         event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement;
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement ||
+        (event.target instanceof HTMLElement && event.target.isContentEditable);
+      if (
+        !editable &&
+        !modal &&
+        !advanced &&
+        !library &&
+        !(event.ctrlKey || event.metaKey || event.altKey)
+      ) {
+        if (["PageDown", "PageUp", "Home", "End"].includes(event.key)) {
+          event.preventDefault();
+          setPageIndex((index) =>
+            event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? doc.pageCount - 1
+                : Math.max(
+                    0,
+                    Math.min(
+                      doc.pageCount - 1,
+                      index + (event.key === "PageDown" ? 1 : -1),
+                    ),
+                  ),
+          );
+        }
+      }
+      if (!(event.ctrlKey || event.metaKey)) return;
+      if (!editable && ["+", "=", "-", "0"].includes(event.key)) {
+        event.preventDefault();
+        if (event.key === "0") setFitWidth(true);
+        else {
+          setFitWidth(false);
+          setZoom((z) =>
+            Math.max(0.15, Math.min(3, z + (event.key === "-" ? -0.15 : 0.15))),
+          );
+        }
+      }
       if (event.key.toLowerCase() === "s") {
         event.preventDefault();
         download();
@@ -484,7 +576,7 @@ export default function App() {
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [doc, busy, history, future]);
+  }, [doc, busy, history, future, modal, advanced, library]);
   useEffect(() => {
     const media = window.matchMedia("(max-width:700px)");
     const change = () => {
@@ -511,6 +603,12 @@ export default function App() {
       onDrop={(e) => {
         e.preventDefault();
         setDragging(false);
+        if (e.dataTransfer.files.length > 1) {
+          setError(
+            "Drop one PDF to open it. Use Combine files to merge several PDFs.",
+          );
+          return;
+        }
         open(e.dataTransfer.files[0]);
       }}
     >
@@ -547,6 +645,7 @@ export default function App() {
           });
         }}
       />
+      {shared && <SharedWorkspace localDocument={doc} onClose={() => setShared(false)} />}
       <header className="toolbar">
         <div className="toolbar-left">
           <IconButton
@@ -617,6 +716,7 @@ export default function App() {
           )}
         </div>
         <div className="toolbar-right">
+          <button className="tools-button" onClick={() => setShared(true)}>Share</button>
           {doc && (
             <button className="tools-button" onClick={() => setAdvanced(true)}>
               <Settings2 size={16} />
@@ -782,7 +882,7 @@ export default function App() {
                 </button>
               ))
             ) : (
-              <p>{indexing ? "Searching…" : "No matches"}</p>
+              <p>{indexing ? "SearchingÃ¢â‚¬Â¦" : "No matches"}</p>
             )}
           </aside>
         )}
@@ -944,10 +1044,14 @@ export default function App() {
                         alt={`Page ${pageIndex + 1} of ${doc.name}`}
                         draggable={false}
                       />
+                      {tool === "read" && (
+                        <TextLayer spans={spans} page={page} zoom={zoom} />
+                      )}
                       {spans.map((span, index) => {
                         const hit =
                           !!query &&
                           span.text.toLowerCase().includes(query.toLowerCase());
+                        if (tool === "read" && !hit) return null;
                         return (
                           <button
                             key={index}
@@ -959,7 +1063,8 @@ export default function App() {
                                 ? span.text
                                 : `${tool === "text" ? "Edit" : tool === "redact" ? "Redact" : "Select"} ${span.text}`
                             }
-                            onClick={() => choose(span)}
+                            tabIndex={tool === "read" ? -1 : 0}
+                            onClick={() => tool !== "read" && choose(span)}
                           />
                         );
                       })}
@@ -1285,7 +1390,9 @@ export default function App() {
                   }
                   onClick={() =>
                     modal === "unlock"
-                      ? open(lockedFile.current || undefined, password)
+                      ? lockedDocumentId
+                        ? unlockSaved()
+                        : open(lockedFile.current || undefined, password)
                       : perform("Protecting document", async () => {
                           const protectedDoc = await request<DocumentInfo>(
                             base + "/edit",

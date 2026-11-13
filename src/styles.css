@@ -1666,3 +1666,24 @@ summary:focus-visible {
 .brand-dot {
   background: var(--accent);
 }
+.pdf-text-layer {
+  position: absolute;
+  inset: 0 auto auto 0;
+  transform-origin: 0 0;
+  user-select: text;
+  cursor: text;
+}
+.pdf-text-layer span {
+  position: absolute;
+  white-space: pre;
+  color: transparent;
+  font-family: Arial, sans-serif;
+  transform-origin: 0 0;
+}
+.pdf-text-layer span::selection {
+  background: #d6b44766;
+  color: transparent;
+}
+.pdf-text-layer ~ .text-region {
+  pointer-events: none;
+}

@@ -6,7 +6,6 @@ import io
 import html
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 import threading
@@ -23,8 +22,12 @@ from pydantic import BaseModel, Field
 
 try:
     from .library import PARENT_REVISION, document_name, record_revision, register as register_library
+    from .ocr import executable as ocr_executable, readiness as ocr_readiness
+    from .text_fonts import replacement_font
 except ImportError:
     from library import PARENT_REVISION, document_name, record_revision, register as register_library
+    from ocr import executable as ocr_executable, readiness as ocr_readiness
+    from text_fonts import replacement_font
 
 ROOT = Path(os.environ.get("FOLIO_DATA_DIR", Path(__file__).parent / "data")).resolve()
 ROOT.mkdir(parents=True, exist_ok=True)
@@ -59,6 +62,10 @@ class Edit(BaseModel):
 
 class Merge(BaseModel):
     ids: list[str]
+
+
+class UnlockRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=4096)
 
 
 def location(document_id: str) -> Path:
@@ -122,7 +129,8 @@ def checked_rect(page: fitz.Page, values: list[float] | None) -> fitz.Rect:
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "engine": "PyMuPDF", "ocr": bool(shutil.which("tesseract"))}
+    ocr = ocr_readiness()
+    return {"status": "ok", "engine": "PyMuPDF", "ocr": ocr["available"], "ocrLanguages": ocr["languages"], "ocrMessage": ocr["message"]}
 
 
 @app.post("/api/documents")
@@ -149,6 +157,15 @@ def document_info(document_id: str):
         return describe(document_id, doc)
 
 
+@app.post("/api/documents/{document_id}/unlock")
+def unlock_document(document_id: str, request: UnlockRequest):
+    with LOCK, fitz.open(location(document_id)) as doc:
+        if doc.needs_pass and not doc.authenticate(request.password):
+            raise HTTPException(423, "Password required or incorrect")
+        name = document_name(ROOT, document_id) or "Document.pdf"
+        return persist(doc, name, encryption=fitz.PDF_ENCRYPT_NONE)
+
+
 @app.get("/api/documents/{document_id}/file")
 def download(document_id: str):
     path = location(document_id)
@@ -171,138 +188,149 @@ def page_text(document_id: str, index: int):
     with open_document(document_id) as doc:
         page = checked_page(doc, index)
         spans = []
-        for block in page.get_text("dict")["blocks"]:
-            for line in block.get("lines", []):
+        for block_index, block in enumerate(page.get_text("dict")["blocks"]):
+            for line_index, line in enumerate(block.get("lines", [])):
                 for span in line["spans"]:
-                    spans.append({key: span[key] for key in ("text", "bbox", "font", "size", "color")})
+                    spans.append({**{key: span[key] for key in ("text", "bbox", "font", "size", "color", "origin", "ascender", "descender")},
+                                  "block": block_index, "line": line_index, "direction": line.get("dir", [1, 0])})
         return {"page": index, "width": page.cropbox.width, "height": page.cropbox.height,
                 "rotation": page.rotation, "spans": spans, "text": page.get_text()}
 
 
-@app.post("/api/documents/{document_id}/edit")
-def edit_document(document_id: str, edit: Edit):
+def apply_edit(doc: fitz.Document, edit: Edit) -> dict:
     if len(edit.color) != 3 or not all(0 <= c <= 1 for c in edit.color):
         raise HTTPException(422, "Color must contain three values from 0 to 1")
+    op = edit.operation
+    if op in {"text", "redact", "annotate"}:
+        page = checked_page(doc, edit.page)
+        rect = checked_rect(page, edit.rect)
+        original_rotation = page.rotation
+        page.set_rotation(0)
+        font_name, font_buffer = replacement_font(page, rect, edit.text) if op == "text" else (None, None)
+        if op in {"text", "redact"}:
+            page.add_redact_annot(rect, fill=None if op == "text" else tuple(edit.color))
+            page.apply_redactions(images=0 if op == "text" else 2, graphics=0 if op == "text" else 1)
+            if op == "text" and edit.text:
+                if font_buffer:
+                    page.insert_font(fontname=font_name, fontbuffer=font_buffer)
+                # Span boxes include ascenders and descenders; preserve the intended font size.
+                box = fitz.Rect(rect.x0, rect.y0, rect.x1,
+                                min(page.cropbox.height, max(rect.y1, rect.y0 + edit.fontSize * 1.8)))
+                if font_name is None:
+                    color = ",".join(str(round(value * 255)) for value in edit.color)
+                    css = f"* {{ margin:0; padding:0; font-family:sans-serif; font-size:{edit.fontSize}pt; color:rgb({color}); }}"
+                    remaining, _ = page.insert_htmlbox(box, "<div>" + html.escape(edit.text).replace("\n", "<br>") + "</div>", css=css, scale_low=1)
+                else:
+                    remaining = page.insert_textbox(box, edit.text, fontsize=edit.fontSize, fontname=font_name, color=tuple(edit.color))
+                if remaining < 0:
+                    raise HTTPException(422, "Replacement text does not fit. Use a wider selection or smaller font")
+        elif edit.kind == "highlight":
+            annotation = page.add_highlight_annot(rect)
+            annotation.set_colors(stroke=tuple(edit.color))
+            annotation.update()
+        elif edit.kind == "note":
+            page.add_text_annot(rect.top_left, edit.text)
+        elif edit.kind in {"underline", "strikeout", "squiggly", "rectangle", "circle"}:
+            creators = {"underline": page.add_underline_annot, "strikeout": page.add_strikeout_annot,
+                        "squiggly": page.add_squiggly_annot, "rectangle": page.add_rect_annot, "circle": page.add_circle_annot}
+            annotation = creators[edit.kind](rect)
+            annotation.set_colors(stroke=tuple(edit.color))
+            annotation.set_info(content=edit.text)
+            annotation.update()
+        elif edit.kind == "text":
+            page.add_freetext_annot(rect, edit.text, fontsize=edit.fontSize, text_color=tuple(edit.color))
+        else:
+            raise HTTPException(422, "Unknown annotation kind")
+        page.set_rotation(original_rotation)
+    elif op == "rotate":
+        if edit.angle % 90:
+            raise HTTPException(422, "Rotation must be a multiple of 90")
+        for index in set(edit.pages):
+            page = checked_page(doc, index)
+            page.set_rotation((page.rotation + edit.angle) % 360)
+    elif op == "delete":
+        for index in edit.pages:
+            checked_page(doc, index)
+        if len(set(edit.pages)) >= len(doc):
+            raise HTTPException(422, "Keep at least one page")
+        for index in sorted(set(edit.pages), reverse=True):
+            doc.delete_page(index)
+    elif op == "reorder":
+        if sorted(edit.order) != list(range(len(doc))):
+            raise HTTPException(422, "Order must contain every page index exactly once")
+        doc.select(edit.order)
+    elif op == "metadata":
+        allowed = {"title", "author", "subject", "keywords", "creator", "producer", "creationDate", "modDate", "trapped"}
+        if not set(edit.metadata).issubset(allowed):
+            raise HTTPException(422, "Unsupported metadata property")
+        metadata = dict(doc.metadata)
+        metadata.update(edit.metadata)
+        doc.set_metadata(metadata)
+    elif op == "attachment":
+        if Path(edit.name).name != edit.name or len(edit.name) > 200:
+            raise HTTPException(422, "Use a simple attachment filename")
+        try:
+            content = base64.b64decode(edit.content, validate=True)
+        except ValueError as exc:
+            raise HTTPException(422, "Attachment must be base64 encoded") from exc
+        if len(content) > MAX_UPLOAD:
+            raise HTTPException(413, "Attachment too large")
+        doc.embfile_add(edit.name, content, filename=edit.name)
+    elif op == "encrypt":
+        if not edit.password:
+            raise HTTPException(422, "A password is required")
+        flags = {"print": fitz.PDF_PERM_PRINT, "copy": fitz.PDF_PERM_COPY, "annotate": fitz.PDF_PERM_ANNOTATE,
+                 "fill": fitz.PDF_PERM_FORM, "modify": fitz.PDF_PERM_MODIFY, "assemble": fitz.PDF_PERM_ASSEMBLE,
+                 "accessibility": fitz.PDF_PERM_ACCESSIBILITY}
+        if not set(edit.permissions).issubset(flags):
+            raise HTTPException(422, "Unknown permission")
+        if len(edit.permissions) < len(flags) and (not edit.ownerPassword or edit.ownerPassword == edit.password):
+            raise HTTPException(422, "Restricted permissions require a distinct owner password")
+        return {"encryption": fitz.PDF_ENCRYPT_AES_256, "user_pw": edit.password,
+                    "owner_pw": edit.ownerPassword or edit.password,
+                    "permissions": sum(flags[value] for value in set(edit.permissions))}
+    elif op == "compress":
+        pass  # persist performs resource garbage collection and stream deflation.
+    elif op == "ocr":
+        executable = ocr_executable()
+        if not executable:
+            raise HTTPException(503, "Install Tesseract and its language data to run OCR")
+        if not re.fullmatch(r"[A-Za-z0-9_]+(?:\+[A-Za-z0-9_]+)*", edit.language):
+            raise HTTPException(422, "Invalid OCR language")
+        selected = sorted(set(edit.pages or range(len(doc))))
+        for index in selected:
+            checked_page(doc, index)
+        with tempfile.TemporaryDirectory(prefix="folio-ocr-") as directory:
+            for index in selected:
+                page = doc[index]
+                if page.get_text().strip():
+                    continue
+                original_rotation = page.rotation
+                page.set_rotation(0)
+                source = Path(directory) / "scan.png"
+                output = Path(directory) / "recognized"
+                page.get_pixmap(dpi=200).save(source)
+                try:
+                    subprocess.run([executable, str(source), str(output), "-l", edit.language, "-c", "textonly_pdf=1", "pdf"],
+                                   capture_output=True, check=True, timeout=180)
+                except subprocess.TimeoutExpired as exc:
+                    raise HTTPException(504, "OCR timed out on this page") from exc
+                except subprocess.CalledProcessError as exc:
+                    raise HTTPException(422, "OCR failed. Check the installed language data") from exc
+                with fitz.open(stream=output.with_suffix(".pdf").read_bytes(), filetype="pdf") as recognized:
+                    page.show_pdf_page(page.rect, recognized, 0)
+                page.set_rotation(original_rotation)
+    else:
+        raise HTTPException(422, "Unknown editing operation")
+    return {}
+
+
+@app.post("/api/documents/{document_id}/edit")
+def edit_document(document_id: str, edit: Edit):
     with LOCK, open_document(document_id) as doc:
         name = describe(document_id, doc)["name"]
-        op = edit.operation
-        if op in {"text", "redact", "annotate"}:
-            page = checked_page(doc, edit.page)
-            rect = checked_rect(page, edit.rect)
-            original_rotation = page.rotation
-            page.set_rotation(0)
-            if op in {"text", "redact"}:
-                page.add_redact_annot(rect, fill=(1, 1, 1) if op == "text" else tuple(edit.color))
-                page.apply_redactions(images=0 if op == "text" else 2, graphics=0 if op == "text" else 1)
-                if op == "text" and edit.text:
-                    # Span boxes include ascenders and descenders; preserve the intended font size.
-                    box = fitz.Rect(rect.x0, rect.y0, rect.x1,
-                                    min(page.cropbox.height, max(rect.y1, rect.y0 + edit.fontSize * 1.8)))
-                    if any(ord(c) > 255 for c in edit.text):
-                        color = ",".join(str(round(value * 255)) for value in edit.color)
-                        css = f"* {{ margin:0; padding:0; font-family:sans-serif; font-size:{edit.fontSize}pt; color:rgb({color}); }}"
-                        remaining, _ = page.insert_htmlbox(box, "<div>" + html.escape(edit.text).replace("\n", "<br>") + "</div>", css=css, scale_low=1)
-                    else:
-                        remaining = page.insert_textbox(box, edit.text, fontsize=edit.fontSize, fontname="helv", color=tuple(edit.color))
-                    if remaining < 0:
-                        raise HTTPException(422, "Replacement text does not fit. Use a wider selection or smaller font")
-            elif edit.kind == "highlight":
-                annotation = page.add_highlight_annot(rect)
-                annotation.set_colors(stroke=tuple(edit.color))
-                annotation.update()
-            elif edit.kind == "note":
-                page.add_text_annot(rect.top_left, edit.text)
-            elif edit.kind in {"underline", "strikeout", "squiggly", "rectangle", "circle"}:
-                creators = {"underline": page.add_underline_annot, "strikeout": page.add_strikeout_annot,
-                            "squiggly": page.add_squiggly_annot, "rectangle": page.add_rect_annot, "circle": page.add_circle_annot}
-                annotation = creators[edit.kind](rect)
-                annotation.set_colors(stroke=tuple(edit.color))
-                annotation.set_info(content=edit.text)
-                annotation.update()
-            elif edit.kind == "text":
-                page.add_freetext_annot(rect, edit.text, fontsize=edit.fontSize, text_color=tuple(edit.color))
-            else:
-                raise HTTPException(422, "Unknown annotation kind")
-            page.set_rotation(original_rotation)
-        elif op == "rotate":
-            if edit.angle % 90:
-                raise HTTPException(422, "Rotation must be a multiple of 90")
-            for index in set(edit.pages):
-                page = checked_page(doc, index)
-                page.set_rotation((page.rotation + edit.angle) % 360)
-        elif op == "delete":
-            for index in edit.pages:
-                checked_page(doc, index)
-            if len(set(edit.pages)) >= len(doc):
-                raise HTTPException(422, "Keep at least one page")
-            for index in sorted(set(edit.pages), reverse=True):
-                doc.delete_page(index)
-        elif op == "reorder":
-            if sorted(edit.order) != list(range(len(doc))):
-                raise HTTPException(422, "Order must contain every page index exactly once")
-            doc.select(edit.order)
-        elif op == "metadata":
-            allowed = {"title", "author", "subject", "keywords", "creator", "producer", "creationDate", "modDate", "trapped"}
-            if not set(edit.metadata).issubset(allowed):
-                raise HTTPException(422, "Unsupported metadata property")
-            metadata = dict(doc.metadata)
-            metadata.update(edit.metadata)
-            doc.set_metadata(metadata)
-        elif op == "attachment":
-            if Path(edit.name).name != edit.name or len(edit.name) > 200:
-                raise HTTPException(422, "Use a simple attachment filename")
-            try:
-                content = base64.b64decode(edit.content, validate=True)
-            except ValueError as exc:
-                raise HTTPException(422, "Attachment must be base64 encoded") from exc
-            if len(content) > MAX_UPLOAD:
-                raise HTTPException(413, "Attachment too large")
-            doc.embfile_add(edit.name, content, filename=edit.name)
-        elif op == "encrypt":
-            if not edit.password:
-                raise HTTPException(422, "A password is required")
-            flags = {"print": fitz.PDF_PERM_PRINT, "copy": fitz.PDF_PERM_COPY, "annotate": fitz.PDF_PERM_ANNOTATE,
-                     "fill": fitz.PDF_PERM_FORM, "modify": fitz.PDF_PERM_MODIFY, "assemble": fitz.PDF_PERM_ASSEMBLE,
-                     "accessibility": fitz.PDF_PERM_ACCESSIBILITY}
-            if not set(edit.permissions).issubset(flags):
-                raise HTTPException(422, "Unknown permission")
-            if len(edit.permissions) < len(flags) and (not edit.ownerPassword or edit.ownerPassword == edit.password):
-                raise HTTPException(422, "Restricted permissions require a distinct owner password")
-            return persist(doc, name, encryption=fitz.PDF_ENCRYPT_AES_256,
-                           user_pw=edit.password, owner_pw=edit.ownerPassword or edit.password,
-                           permissions=sum(flags[value] for value in set(edit.permissions)))
-        elif op == "compress":
-            pass  # persist performs resource garbage collection and stream deflation.
-        elif op == "ocr":
-            executable = shutil.which("tesseract")
-            if not executable:
-                raise HTTPException(503, "Install Tesseract and its language data to run OCR")
-            if not re.fullmatch(r"[A-Za-z0-9_]+(?:\+[A-Za-z0-9_]+)*", edit.language):
-                raise HTTPException(422, "Invalid OCR language")
-            selected = sorted(set(edit.pages or range(len(doc))))
-            for index in selected:
-                checked_page(doc, index)
-            with tempfile.TemporaryDirectory(prefix="folio-ocr-") as directory:
-                for index in selected:
-                    page = doc[index]
-                    if page.get_text().strip():
-                        raise HTTPException(422, "OCR currently accepts image-only pages. Select scanned pages")
-                    source = Path(directory) / "scan.png"
-                    output = Path(directory) / "recognized"
-                    page.get_pixmap(dpi=200).save(source)
-                    try:
-                        subprocess.run([executable, str(source), str(output), "-l", edit.language, "pdf"],
-                                       capture_output=True, check=True, timeout=180)
-                    except subprocess.TimeoutExpired as exc:
-                        raise HTTPException(504, "OCR timed out on this page") from exc
-                    except subprocess.CalledProcessError as exc:
-                        raise HTTPException(422, "OCR failed. Check the installed language data") from exc
-                    with fitz.open(output.with_suffix(".pdf")) as recognized:
-                        doc.insert_pdf(recognized, start_at=index)
-                    doc.delete_page(index + 1)
-        else:
-            raise HTTPException(422, "Unknown editing operation")
-        return persist(doc, name)
+        options = apply_edit(doc, edit)
+        return persist(doc, name, **options)
 
 
 @app.post("/api/merge")
@@ -392,3 +420,9 @@ except ImportError:
 register_production(app, location, open_document, describe, persist, LOCK)
 
 register_library(app, lambda: ROOT, location, open_document, describe, LOCK)
+
+try:
+    from .shared import register as register_shared
+except ImportError:
+    from shared import register as register_shared
+register_shared(app, lambda: ROOT, location, apply_edit, Edit, checked_page, checked_rect, LOCK)

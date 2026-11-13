@@ -44,7 +44,9 @@ execFileSync(path.join(root, "server/.venv/Scripts/python.exe"), [
       .first()
       .setInputFiles(path.join(__dirname, "signing.pdf"));
     await page
-      .getByRole("button", { name: "Original content", exact: true })
+      .locator(
+        '[aria-label="Original content"], .pdf-text-layer span:text-is("Original content")',
+      )
       .waitFor();
     await page.getByRole("button", { name: "Tools", exact: true }).click();
     await page

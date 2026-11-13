@@ -17,7 +17,7 @@ All routes start with `/api`. Uploaded documents and immutable revisions live in
 
 Edit operations and fields
 
-- `text` uses `page`, `rect`, `text`, `fontSize`, RGB `color` values in 0..1. Redacts the selected old text, then inserts replacement. Currently Helvetica/Latin-1 only. Overflow returns 422 and creates no revision.
+- `text` uses `page`, `rect`, `text`, `fontSize`, RGB `color` values in 0..1. Removes selected old text without painting over the page background, then inserts replacement. Reuses supported original base-14 or embedded fonts when they contain the required glyphs; otherwise uses a fallback. Overflow returns 422 and creates no revision.
 - `redact` uses `page`, `rect`, `color`. Applies permanent content removal and stream cleanup.
 - `annotate` uses `page`, `rect`, `kind` (`highlight`, `note`, `text`), `text`, `fontSize`, `color`.
 - `rotate` uses `pages`, `angle` in multiples of 90.
@@ -25,13 +25,13 @@ Edit operations and fields
 - `reorder` uses `order`, an exact permutation of all indexes.
 - `metadata` uses a metadata property dictionary.
 - `attachment` uses simple filename `name` and base64 `content`.
-- `encrypt` uses `password`, optional `ownerPassword`. The result is locked, so download its file and retain the current unlocked editing revision. Reupload with password to edit.
+- `encrypt` uses `password`, optional `ownerPassword`. The result is locked. `POST /api/documents/{id}/unlock` with `{password}` creates an unlocked revision while retaining the encrypted original; incorrect passwords return 423.
 - `compress` removes unreachable objects and deflates streams. It does not yet downsample images.
-- `ocr` uses `pages` (empty means all) and `language` such as `eng` or `eng+fra`. Requires Tesseract in PATH. Currently image-only pages. Replaces selected scans with searchable PDF output. Existing text returns 422.
+- `ocr` uses `pages` (empty means all) and `language` such as `eng` or `eng+fra`. Requires Tesseract, discovered through `FOLIO_TESSERACT`, PATH, or standard Windows install directories. Adds invisible searchable text to scans, preserving page appearance, annotations and links. Pages already containing text are skipped. Health reports readiness and available languages; install language data separately when needed.
 
-DOCX export preserves styled editable text, embedded images, page sizes and approximate block spacing. Overlapping objects, multi-column layouts and table reconstruction remain pending. OCR currently rasterizes selected pages and does not preserve their interactive content. These limitations remain release-blocking inventory work. This service alone does not provide full Acrobat parity.
+DOCX export preserves styled editable text, embedded images, page sizes and approximate block spacing. Overlapping objects, multi-column layouts and table reconstruction remain limited. This service does not claim full Acrobat parity.
 
-The server is intended for localhost. Production hosting requires authentication, request limits and a separately isolated processing service. Default CORS accepts local Vite development/preview origins. Invalid IDs never resolve filesystem paths supplied by clients. Uploads are limited to 100 MB.
+The server is intended for localhost. Shared documents require authentication and membership. After the first account is created, local workspace APIs require that account's session. Public hosting additionally requires TLS, operational request limits and separately isolated PDF processing. Host and Origin checks accept loopback defaults and explicitly configured `FOLIO_ALLOWED_ORIGINS`. Invalid IDs never resolve filesystem paths supplied by clients. Uploads are limited to 100 MB.
 
 ## Forms and advanced tools
 
@@ -110,7 +110,7 @@ Certificate implementation follows [pyHanko signing documentation](https://docs.
 
 `GET /api/documents/{id}/comments` returns PDF annotations as `{comments:[{page,xref,type,rect,text,author,replyTo,resolved}]}`. IDs are PDF xrefs in the current revision and must be refreshed after mutation.
 
-`POST /api/documents/{id}/comments` creates a new revision. Add with `{operation:'add',page,rect,text,author}`. Reply with `replyTo:xref` on the same page. Edit with `{operation:'edit',page,xref,text,author}`. Resolve/reopen with `{operation:'resolve',page,xref,resolved:true|false}`. Delete with `{operation:'delete',page,xref}` after deleting replies. Threads persist as native PDF reply relationships. Resolved status uses PDF Review/Accepted state. `GET .../comments/summary` downloads a plain-text review summary; the regular comments endpoint provides JSON export. Import, review synchronization and shared server identities remain pending.
+`POST /api/documents/{id}/comments` creates a new revision. Add with `{operation:'add',page,rect,text,author}`. Reply with `replyTo:xref` on the same page. Edit with `{operation:'edit',page,xref,text,author}`. Resolve/reopen with `{operation:'resolve',page,xref,resolved:true|false}`. Delete with `{operation:'delete',page,xref}` after deleting replies. Threads persist as native PDF reply relationships. Resolved status uses PDF Review/Accepted state. `GET .../comments/summary` downloads a plain-text review summary; the regular comments endpoint provides JSON export. These local PDF annotations are separate from authenticated shared discussion threads.
 
 `POST /api/documents/{id}/measurements` accepts `{page,kind:'distance'|'perimeter'|'area',points:[[x,y],...],unitsPerPoint:1,unit:'pt',label:''}`. Distance uses exactly two points; perimeter/area use at least three. Perimeter closes the polygon. Area uses the absolute shoelace area; use simple non-self-intersecting polygons. Coordinates are unrotated page points. Calibration scales distance/perimeter linearly and area quadratically. Measurement marks are saved as PDF line/polygon annotations with Folio measurement metadata.
 
@@ -151,3 +151,19 @@ PATCH `/api/library/{revisionId}` accepts `{name?,folder?,favorite?}` and update
 PUT `/api/library-recovery/{client}` accepts `{documentId,page,zoom}` and GET returns `{state:null|{documentId,page,zoom,updated}}`. Client keys use 1–80 ASCII letters/digits/underscore/hyphen. Recovery metadata survives process restarts. Document IDs, page indices and zoom bounds are validated. This recovers saved PDF revisions and viewing position; unsaved editor keystrokes require frontend draft persistence.
 
 SQLite `library.sqlite3` uses WAL, foreign keys, a 30-second busy timeout and transactional writes. Initial schema version is 1. Normal persistence records source ancestry from the opened document and request context; incremental certificate signing records ancestry explicitly. Multi-source merges currently establish new logical documents; provenance for all merge inputs is pending. Operations creating branches keep all revisions and choose the latest committed one for library listing. Recovery can discover completed PDFs after an interrupted metadata write, but their missing ancestry cannot be inferred. No file deletion or retention policy is applied.
+
+## Shared workspace
+
+Accounts and shared revision bytes persist in `shared/shared.sqlite3`, separate from local UUID files. Passwords use scrypt; session and invitation tokens are stored hashed. Browser sessions use HttpOnly SameSite=Strict cookies. Shared/auth responses disable caching. Missing Origin is permitted for native clients; browser Origins and request Hosts are checked. The first registered account owns the local workspace; other accounts can access only shared documents granted to them.
+
+- `POST /api/auth/signup` `{username,password,displayName}`; `POST /api/auth/login` `{username,password}`; `GET /api/auth/me`: return `{user:{id,username,displayName,workspaceOwner}}`. Passwords require at least 10 characters. `POST /api/auth/logout` invalidates the current session.
+- `GET /api/shared` lists accessible documents. `POST /api/shared` `{documentId,name?}` copies a local PDF into a shared document (workspace owner only).
+- `GET /api/shared/{id}` returns `{id,name,version,role,document,comments,members}`. `document` has the usual PDF page descriptor. Comments include `id,author,text,page,created,resolved`; author is the authenticated display name. Only owners receive the member list (`id,displayName,role`).
+- `GET /api/shared/{id}/file`, `/pages/{page}/render`, and `/pages/{page}/text` require membership for every request. No shared file is exposed through a local document ID.
+- `POST /api/shared/{id}/edit` `{expectedVersion,edit}` accepts text, redact, annotate, rotate, reorder, delete and metadata operations using the existing edit schema. Editors and owners may edit; commenters may annotate; viewers may only read.
+- `POST /api/shared/{id}/comments` `{expectedVersion,text,page}` requires commenter or higher. `PATCH /api/shared/{id}/comments/{commentId}` `{expectedVersion,resolved}` allows the author or an editor to resolve/reopen.
+- Editing and commenting use an atomic version comparison. Stale submissions return 409 with `detail:{message,currentVersion}` and never overwrite newer content. Clients poll state to receive durable updates; this is action-level collaboration, not character-level simultaneous text merging.
+- Owners create single-use, one-day invitations with `POST /api/shared/{id}/invites` `{role}` (`viewer`, `commenter`, `editor`), returning `{token,expires}`. `POST /api/shared/join` `{token}` redeems it. `GET /api/shared/{id}/invites` lists unused invitations; `DELETE /api/shared/{id}/invites/{inviteId}` cancels one. `DELETE /api/shared/{id}/members/{userId}` revokes membership immediately; the owner cannot be removed.
+- `POST /api/shared/{id}/presence` `{page}` returns members seen within 60 seconds. Presence is informational; all writes still require permission and version checks.
+
+Advanced local export and production tools remain local workspace operations. Shared discussion threads live in the collaboration database and are not embedded in downloaded PDF files. Public deployment is not configured by the local launcher.

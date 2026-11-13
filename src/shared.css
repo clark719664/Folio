@@ -1,0 +1,298 @@
+.shared-workspace {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  overflow: hidden;
+}
+.shared-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 25px;
+  border-bottom: 1px solid var(--border);
+  gap: 15px;
+}
+.shared-header strong {
+  font-size: 18px;
+  letter-spacing: -0.5px;
+}
+.shared-header small {
+  display: block;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.shared-actions,
+.shared-tools,
+.shared-document-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.shared-workspace button {
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.shared-workspace button:hover {
+  background: var(--hover);
+}
+.shared-workspace button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.shared-workspace .shared-primary {
+  background: var(--primary);
+  color: var(--primary-ink);
+  padding: 10px 16px;
+}
+.shared-workspace label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+.shared-workspace input,
+.shared-workspace textarea,
+.shared-workspace select {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 9px;
+  font: inherit;
+  max-width: 100%;
+}
+.shared-workspace textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+.shared-auth {
+  width: min(380px, 100%);
+  margin: 7vh auto;
+  padding: 20px;
+  overflow: auto;
+}
+.shared-auth h1,
+.shared-list h1 {
+  font-size: 27px;
+  letter-spacing: -1px;
+}
+.shared-auth p,
+.shared-list p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.shared-auth > button {
+  display: block;
+  width: 100%;
+  margin: 12px 0;
+}
+.shared-list {
+  width: min(850px, 100%);
+  margin: 35px auto;
+  padding: 20px;
+  overflow: auto;
+}
+.shared-document {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border) !important;
+  padding: 20px 12px !important;
+  text-align: left;
+}
+.shared-document span,
+.shared-role,
+.shared-save {
+  color: var(--muted);
+  font-size: 12px;
+}
+.shared-list > div {
+  margin-top: 30px;
+}
+.shared-document-bar {
+  padding: 10px 22px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.shared-document-bar > strong {
+  overflow-wrap: anywhere;
+}
+.shared-save {
+  margin-left: auto;
+}
+.shared-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+.shared-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-soft);
+}
+.shared-tools {
+  padding: 10px 15px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.shared-tools button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.shared-canvas {
+  overflow: auto;
+  flex: 1;
+  padding: 28px;
+}
+.shared-paper {
+  position: relative;
+  background: white;
+  box-shadow: 0 3px 18px #0002;
+  margin: auto;
+  flex-shrink: 0;
+}
+.shared-paper > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.shared-span-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+.shared-span-layer button {
+  position: absolute;
+  border-radius: 0;
+  padding: 0;
+  outline: 1px solid transparent;
+}
+.shared-span-layer button:hover {
+  background: #e0c36c44;
+  outline-color: #b49a50;
+}
+.shared-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  overflow: auto;
+  padding: 20px;
+  border-left: 1px solid var(--border);
+}
+.shared-sidebar h2 {
+  font-size: 13px;
+  margin: 0 0 15px;
+}
+.shared-sidebar section,
+.shared-sidebar > form {
+  padding-bottom: 22px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.shared-sidebar p {
+  line-height: 1.6;
+  color: var(--muted);
+}
+.shared-comment {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.shared-comment > button {
+  font-size: 11px;
+  color: var(--muted);
+}
+.shared-comment p {
+  white-space: pre-wrap;
+  color: var(--ink);
+  margin: 5px 0;
+}
+.shared-comment.resolved {
+  opacity: 0.6;
+}
+.shared-member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+.shared-member small {
+  display: block;
+  color: var(--muted);
+  padding-top: 4px;
+}
+.shared-message {
+  padding: 12px 24px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  line-height: 1.5;
+}
+.shared-message button {
+  text-decoration: underline;
+}
+.shared-empty {
+  padding: 50px;
+  text-align: center;
+}
+.shared-presence {
+  font-size: 12px;
+}
+.shared-workspace small {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.shared-document-bar a {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+@media (max-width: 750px) {
+  .shared-header {
+    padding: 12px;
+  }
+  .shared-header small {
+    display: none;
+  }
+  .shared-actions {
+    gap: 3px;
+  }
+  .shared-actions > span {
+    display: none;
+  }
+  .shared-body {
+    flex-direction: column;
+    overflow: auto;
+  }
+  .shared-main {
+    min-height: 55vh;
+    flex: none;
+  }
+  .shared-sidebar {
+    width: 100%;
+    overflow: visible;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .shared-canvas {
+    max-height: 60vh;
+    padding: 16px;
+  }
+  .shared-tools {
+    gap: 4px;
+  }
+  .shared-save {
+    margin-left: 0;
+  }
+  .shared-document-bar {
+    padding: 8px;
+    gap: 6px;
+  }
+}

@@ -27,11 +27,15 @@ execFileSync(path.join(root, "server/.venv/Scripts/python.exe"), [
     await page.getByRole("button", { name: "Open PDF", exact: true }).waitFor();
     await page.locator("input[type=file]").first().setInputFiles(fixture);
     await page
-      .getByRole("button", { name: "Original library text", exact: true })
+      .locator(
+        '[aria-label="Original library text"], .pdf-text-layer span:text-is("Original library text")',
+      )
       .waitFor();
     await page.getByRole("button", { name: "Next page", exact: true }).click();
     await page
-      .getByRole("button", { name: "Library second page", exact: true })
+      .locator(
+        '[aria-label="Library second page"], .pdf-text-layer span:text-is("Library second page")',
+      )
       .waitFor();
     await page
       .getByRole("button", { name: "Zoom in", exact: true })
@@ -48,7 +52,9 @@ execFileSync(path.join(root, "server/.venv/Scripts/python.exe"), [
     );
     await page.reload();
     await page
-      .getByRole("button", { name: "Library second page", exact: true })
+      .locator(
+        '[aria-label="Library second page"], .pdf-text-layer span:text-is("Library second page")',
+      )
       .waitFor();
     const after = await page.evaluate(() =>
       JSON.parse(localStorage.getItem("folio.document-session.v1")),
@@ -119,7 +125,9 @@ execFileSync(path.join(root, "server/.venv/Scripts/python.exe"), [
     const restored = await restoredResponse.json();
     assert.notEqual(restored.id, edited.id);
     await page
-      .getByRole("button", { name: "Original library text", exact: true })
+      .locator(
+        '[aria-label="Original library text"], .pdf-text-layer span:text-is("Original library text")',
+      )
       .waitFor();
     const downloadEvent = page.waitForEvent("download");
     await page
@@ -131,7 +139,9 @@ execFileSync(path.join(root, "server/.venv/Scripts/python.exe"), [
     );
     await page.reload();
     await page
-      .getByRole("button", { name: "Original library text", exact: true })
+      .locator(
+        '[aria-label="Original library text"], .pdf-text-layer span:text-is("Original library text")',
+      )
       .waitFor();
     assert.deepEqual(errors, []);
     console.log(

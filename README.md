@@ -23,7 +23,7 @@ Print tools open the PDF in the browser's native print viewer and prepare multip
 
 Text replacement uses Helvetica for Latin-1 and fallback fonts with shaping for Unicode. Original font fidelity and complex paragraph reflow remain incomplete. Oversized replacements are rejected without changing the original revision. Office exports produce editable content, with remaining layout, vector, merged-table and rotation limitations. Certificate verification currently runs offline and does not establish revocation or timestamp status. Automated accessibility inspection covers a subset of checks and does not establish PDF/UA conformance. See `server/API.md` for precise operation limits.
 
-The complete release target includes all paid Acrobat workflows. This development checkpoint has not reached that target. See the design and implementation documents under `docs` for the remaining work.
+The release focuses on a polished, free PDF viewer and editor: reading, selection, editing, annotation, page organization, forms, conversion and document sharing. AI and Studio workflows are outside its scope. Capabilities and limitations are documented here and in `server/API.md`.
 
 ## Verification
 

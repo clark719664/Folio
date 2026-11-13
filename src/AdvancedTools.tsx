@@ -493,17 +493,27 @@ export default function AdvancedTools({
             <div className="tool-search">
               <Search size={16} />
               <input
+                autoFocus
                 aria-label="Find a tool"
                 placeholder="Find a tool"
                 value={toolQuery}
                 onChange={(event) => setToolQuery(event.target.value)}
               />
             </div>
+            {!items.some((item) =>
+              (item.label + " " + item.description)
+                .toLowerCase()
+                .includes(toolQuery.trim().toLowerCase()),
+            ) && (
+              <p className="help-text" role="status">
+                No matching tools.
+              </p>
+            )}
             {items
               .filter((item) =>
                 (item.label + " " + item.description)
                   .toLowerCase()
-                  .includes(toolQuery.toLowerCase()),
+                  .includes(toolQuery.trim().toLowerCase()),
               )
               .map((item) => (
                 <button key={item.id} onClick={() => setView(item.id)}>
@@ -665,7 +675,7 @@ export default function AdvancedTools({
                         <span>
                           Image {index + 1}{" "}
                           <small>
-                            {image.width} × {image.height}
+                            {image.width} Ã— {image.height}
                           </small>
                         </span>
                         <button
@@ -840,7 +850,7 @@ export default function AdvancedTools({
                             (document) => document.id === hit.id,
                           )?.name
                         }{" "}
-                        · Page {hit.page + 1}
+                        Â· Page {hit.page + 1}
                       </small>
                       <span>{hit.text}</span>
                     </button>
@@ -1186,7 +1196,7 @@ export default function AdvancedTools({
                           })
                         }
                       >
-                        <option value="">Select…</option>
+                        <option value="">Selectâ€¦</option>
                         {field.choices.map((choice) => (
                           <option key={choice}>{choice}</option>
                         ))}
@@ -1952,7 +1962,7 @@ export default function AdvancedTools({
         {busy && (
           <div className="tool-progress" role="status">
             <LoaderCircle className="spin" size={16} />
-            Working…
+            Workingâ€¦
           </div>
         )}
       </section>

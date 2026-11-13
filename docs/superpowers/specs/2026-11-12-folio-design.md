@@ -1,5 +1,11 @@
 # Folio design
 
+## Revised release scope
+
+Shared PDF collaboration is explicitly required. Multiple people can work on the same PDF with invited roles, visible presence, synchronized document edits and comments, durable history, and conflict handling. Enforce permissions on the server and test separate users, concurrent edits and revoked invitations. Local development verification uses separate browser sessions. Public service deployment requires an actual hosting destination and configured authentication/delivery infrastructure.
+
+Clark subsequently authorized a practical, polished free PDF viewer and editor with everything reasonable to complete. This supersedes the earlier requirement for complete Acrobat parity in the first release. AI and Studio implementation are excluded. Focus on reliable reading, text and image edits, annotations, page organization, forms, signatures, OCR, useful exports, local library/history, and light/dark/system appearance. Existing enterprise, collaboration, proprietary compatibility and specialist production inventory entries are reference candidates, not automatic release gates. The application remains fully open source with optional Cash App donations. Verify supported workflows and disclose concrete compatibility limitations.
+
 Folio is a working name for Clark's free, fully open-source PDF viewer and editor. The user approved a dedicated editor built on open-source engines. Every paid Acrobat workflow remains a product target, with implemented and verified functionality tracked honestly.
 
 The interface takes its restraint from Apple Notes. The document is the primary content. Compact controls, readable typography, contextual tools and accessible labels serve a concrete action. A donation link in the menu points to https://cash.app/$ClarkLangloisII. Donations are optional and every implemented feature is available free.

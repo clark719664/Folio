@@ -26,7 +26,9 @@ execFileSync(path.join(root, "server/.venv/Scripts/python.exe"), [
     await page.getByRole("button", { name: "Open PDF", exact: true }).waitFor();
     await page.locator("input[type=file]").first().setInputFiles(fixture);
     await page
-      .getByRole("button", { name: "Review document", exact: true })
+      .locator(
+        '[aria-label="Review document"], .pdf-text-layer span:text-is("Review document")',
+      )
       .waitFor();
     async function tool(label) {
       await page.getByRole("button", { name: "Tools", exact: true }).click();
@@ -62,13 +64,11 @@ execFileSync(path.join(root, "server/.venv/Scripts/python.exe"), [
     await page.getByLabel("Comment text").fill("Verified against the source.");
     await save("Post reply", "/comments");
     await tool("Comments");
-    const parent = page
-      .locator(".review-item")
-      .filter({
-        has: page
-          .locator("p")
-          .filter({ hasText: /^Please verify this section\.$/ }),
-      });
+    const parent = page.locator(".review-item").filter({
+      has: page
+        .locator("p")
+        .filter({ hasText: /^Please verify this section\.$/ }),
+    });
     const resolve = page.waitForResponse(
       (response) =>
         response.url().endsWith("/comments") &&

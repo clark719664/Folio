@@ -1,5 +1,7 @@
 # Full release acceptance inventory
 
+Scope update — This is the historical exhaustive research inventory. Clark now requests everything reasonable for an excellent free PDF viewer/editor, explicitly excluding AI and Studio. The I and B sections are excluded from current implementation. Other advanced capabilities are evaluated by usefulness and feasibility. Unimplemented specialist features no longer imply the practical viewer/editor cannot ship. Retain honest evidence for every advertised feature.
+
 Research date 2026-11-12. All entries start UNVERIFIED. This is the mandatory first-release baseline. Foundational builds do not satisfy this release. Each checkbox requires a fixture, a normal UI execution, saved output where relevant, and an independent check. A button, mock response, or library capability claim is insufficient.
 
 Completeness remains unproven until the desktop, web, mobile and bundled Express catalogs have been reconciled line by line. Adobe help includes features available in free Reader and separately sold enterprise products. Those entitlement distinctions require verification and must not silently remove capabilities. Platform-specific integrations require their own acceptance fixtures.

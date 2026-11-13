@@ -1,5 +1,7 @@
 # Full-release implementation plan
 
+Scope update — Clark has replaced exhaustive Acrobat first-release parity with a practical best free PDF viewer/editor. AI and Studio are excluded. Prioritize reliable core editing, reading, OCR, exports, forms, signing and polished light/dark UI. The historical steps below serve as a capability inventory and do not all block this revised release.
+
 Authority is Clark's 2026-11-12 instruction requiring every feature in the first release. This plan supersedes any milestone language that suggests shipping partial Acrobat coverage. The baseline is feature-inventory.md. All acceptance statuses remain unverified until execution evidence exists.
 
 1. Reconcile the official desktop, web, mobile and Express catalogs against the inventory. Preserve URLs and retrieval dates. Confirm entitlement marks visually where page text omits them. Expand grouped checks into fixture-level cases and close the discovery gaps listed in the inventory.

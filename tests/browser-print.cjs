@@ -26,7 +26,9 @@ execFileSync(path.join(root, "server/.venv/Scripts/python.exe"), [
     await page.getByRole("button", { name: "Open PDF", exact: true }).waitFor();
     await page.locator("input[type=file]").first().setInputFiles(fixture);
     await page
-      .getByRole("button", { name: "Print page 1", exact: true })
+      .locator(
+        '[aria-label="Print page 1"], .pdf-text-layer span:text-is("Print page 1")',
+      )
       .waitFor();
     await page
       .getByRole("button", { name: "More actions", exact: true })
