@@ -1,5 +1,8 @@
+import { useAppearance } from "./appearance";
 import { useDialog } from "./useDialog";
 import AdvancedTools from "./AdvancedTools";
+import LibraryPanel from "./LibraryPanel";
+import { readSession, writeSession, clearSession, exportName } from "./session";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown,
@@ -33,6 +36,7 @@ import {
   Heart,
   Layers,
   Printer,
+  Library,
   LoaderCircle,
 } from "lucide-react";
 type Page = {
@@ -117,6 +121,7 @@ function spanStyle(span: Span, page: Page) {
 }
 export default function App() {
   const [doc, setDoc] = useState<DocumentInfo | null>(null);
+  const documentLoad = useRef(0);
   const [history, setHistory] = useState<DocumentInfo[]>([]);
   const [future, setFuture] = useState<DocumentInfo[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
@@ -133,7 +138,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [menu, setMenu] = useState(false);
+  const [appearance, setAppearance] = useAppearance();
   const [advanced, setAdvanced] = useState(false);
+  const [library, setLibrary] = useState(false);
   const [modal, setModal] = useState<
     "properties" | "password" | "unlock" | "export" | null
   >(null);
@@ -164,6 +171,39 @@ export default function App() {
   const lockedFile = useRef<File | null>(null);
   const mergeInput = useRef<HTMLInputElement>(null);
   const page = doc?.pages[pageIndex];
+  useEffect(() => {
+    const saved = readSession();
+    if (!saved) return;
+    const controller = new AbortController();
+    const load = ++documentLoad.current;
+    request<DocumentInfo>(`/documents/${saved.documentId}`, {
+      signal: controller.signal,
+    })
+      .then((next) => {
+        if (load !== documentLoad.current) return;
+        setDoc(next);
+        setPageIndex(Math.min(saved.page, Math.max(0, next.pageCount - 1)));
+        setZoom(saved.zoom);
+        setFitWidth(saved.fitWidth);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted || load !== documentLoad.current) return;
+        if (error.status === 404) {
+          clearSession();
+          setError(
+            "The previous document is no longer available. Open it again to continue.",
+          );
+        } else
+          setError(
+            "Unable to reopen the previous document. Check the local PDF service and reload.",
+          );
+      });
+    return () => controller.abort();
+  }, []);
+  useEffect(() => {
+    if (doc)
+      writeSession({ documentId: doc.id, page: pageIndex, zoom, fitWidth });
+  }, [doc?.id, pageIndex, zoom, fitWidth]);
   useEffect(() => {
     if (!doc || !page || !fitWidth || !pageViewport.current) return;
     const element = pageViewport.current;
@@ -283,6 +323,28 @@ export default function App() {
     setPageIndex((i) => Math.min(i, next.pageCount - 1));
     setSelected(null);
   }
+  async function openSaved(documentId: string) {
+    documentLoad.current++;
+    return perform("Opening document", async () => {
+      const next = await request<DocumentInfo>(`/documents/${documentId}`);
+      setDoc(next);
+      setHistory([]);
+      setFuture([]);
+      setPageIndex(0);
+      setSelected(null);
+      setSplitFiles([]);
+      setTool("read");
+      setLibrary(false);
+    });
+  }
+  async function refreshDocumentMetadata() {
+    if (doc) {
+      const next = await request<DocumentInfo>(`/documents/${doc.id}`);
+      setDoc((current) =>
+        current?.id === next.id ? { ...current, name: next.name } : current,
+      );
+    }
+  }
   async function upload(file: File, filePassword = ""): Promise<DocumentInfo> {
     const body = new FormData();
     body.append("file", file);
@@ -291,6 +353,7 @@ export default function App() {
   }
   function open(file?: File, filePassword = "") {
     if (!file) return;
+    documentLoad.current++;
     perform("Opening document", async () => {
       try {
         const next = await upload(file, filePassword);
@@ -395,7 +458,7 @@ export default function App() {
     perform("Preparing download", async () => {
       await saveFile(
         base + (format === "pdf" ? "/file" : `/export/${format}`),
-        doc.name.replace(/\.pdf$/i, "") + "." + format,
+        exportName(doc.name, format),
       );
       setModal(null);
     });
@@ -588,6 +651,10 @@ export default function App() {
             </IconButton>
             {menu && (
               <div className="dropdown" onClick={() => setMenu(false)}>
+                <button onClick={() => setLibrary(true)}>
+                  <Library size={16} />
+                  Library
+                </button>
                 <button onClick={() => input.current?.click()}>
                   <FolderOpen size={16} />
                   Open PDF<kbd>Ctrl O</kbd>
@@ -643,6 +710,28 @@ export default function App() {
                     </button>
                   </>
                 )}
+                <fieldset
+                  className="appearance"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <legend>Appearance</legend>
+                  <div
+                    className="appearance-options"
+                    role="radiogroup"
+                    aria-label="Appearance"
+                  >
+                    {(["light", "dark", "system"] as const).map((value) => (
+                      <button
+                        key={value}
+                        role="radio"
+                        aria-checked={appearance === value}
+                        onClick={() => setAppearance(value)}
+                      >
+                        {value[0].toUpperCase() + value.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
                 <div className="menu-rule" />
                 <a
                   href="https://cash.app/$ClarkLangloisII"
@@ -699,6 +788,13 @@ export default function App() {
         )}
         {doc && sidebar && (
           <aside className="sidebar">
+            <button
+              className="sidebar-library"
+              onClick={() => setLibrary(true)}
+            >
+              <Library size={16} />
+              Library
+            </button>
             <div className="sidebar-header">
               <span>Pages</span>
               <span>{doc.pageCount}</span>
@@ -1042,6 +1138,13 @@ export default function App() {
           </aside>
         )}
       </div>
+      {library && (
+        <LibraryPanel
+          onClose={() => setLibrary(false)}
+          onOpen={openSaved}
+          onMetadataChanged={refreshDocumentMetadata}
+        />
+      )}
       {advanced && doc && (
         <AdvancedTools
           document={doc}

@@ -21,6 +21,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
+try:
+    from .library import PARENT_REVISION, document_name, record_revision, register as register_library
+except ImportError:
+    from library import PARENT_REVISION, document_name, record_revision, register as register_library
+
 ROOT = Path(os.environ.get("FOLIO_DATA_DIR", Path(__file__).parent / "data")).resolve()
 ROOT.mkdir(parents=True, exist_ok=True)
 MAX_UPLOAD = 100 * 1024 * 1024
@@ -29,7 +34,7 @@ app = FastAPI(title="Folio PDF service", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=[
     "http://localhost:5173", "http://127.0.0.1:5173",
     "http://localhost:4173", "http://127.0.0.1:4173",
-], allow_methods=["GET", "POST", "DELETE"], allow_headers=["Content-Type"])
+], allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Content-Type"])
 
 
 class Edit(BaseModel):
@@ -75,19 +80,26 @@ def open_document(document_id: str) -> fitz.Document:
 
 def describe(document_id: str, doc: fitz.Document, name: str | None = None) -> dict:
     name_file = ROOT / f"{document_id}.name"
-    return {"id": document_id, "name": name or (name_file.read_text(encoding="utf-8") if name_file.exists() else "Document.pdf"),
+    return {"id": document_id, "name": name or document_name(ROOT, document_id) or (name_file.read_text(encoding="utf-8") if name_file.exists() else "Document.pdf"),
             "pageCount": len(doc), "pages": [{"index": p.number, "width": p.cropbox.width,
             "height": p.cropbox.height, "rotation": p.rotation} for p in doc], "metadata": doc.metadata}
 
 
 def persist(doc: fitz.Document, name: str = "Document.pdf", **options: Any) -> dict:
     document_id = uuid.uuid4().hex
+    parent = PARENT_REVISION.get()
+    if parent is None and doc.name:
+        candidate = Path(doc.name).stem
+        parent = candidate if re.fullmatch(r"[a-f0-9]{32}", candidate) and (ROOT / f"{candidate}.pdf").is_file() else None
+    if parent:
+        name = document_name(ROOT, parent) or name
     result = describe(document_id, doc, name)
     data = doc.tobytes(garbage=4, deflate=True, **options)
     temporary = ROOT / f"{document_id}.tmp"
     temporary.write_bytes(data)
     temporary.replace(ROOT / f"{document_id}.pdf")
     (ROOT / f"{document_id}.name").write_text(Path(name).name, encoding="utf-8")
+    record_revision(ROOT, document_id, Path(name).name, parent)
     return result
 
 
@@ -139,7 +151,8 @@ def document_info(document_id: str):
 
 @app.get("/api/documents/{document_id}/file")
 def download(document_id: str):
-    return FileResponse(location(document_id), media_type="application/pdf", filename="Document.pdf")
+    path = location(document_id)
+    return FileResponse(path, media_type="application/pdf", filename=document_name(ROOT, document_id) or "Document.pdf")
 
 
 @app.get("/api/documents/{document_id}/pages/{index}/render")
@@ -377,3 +390,5 @@ try:
 except ImportError:
     from production import register as register_production
 register_production(app, location, open_document, describe, persist, LOCK)
+
+register_library(app, lambda: ROOT, location, open_document, describe, LOCK)

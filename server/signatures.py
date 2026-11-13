@@ -95,6 +95,12 @@ def register(app, location, describe):
         temporary.write_bytes(data)
         temporary.replace(source.parent / f"{new_id}.pdf")
         (source.parent / f"{new_id}.name").write_text("Signed.pdf", encoding="utf-8")
+        try:
+            from .library import record_revision, document_name
+        except ImportError:
+            from library import record_revision, document_name
+        record_revision(source.parent, new_id, "Signed.pdf", document_id)
+        result["name"] = document_name(source.parent, new_id) or "Signed.pdf"
         return result
 
     @app.post("/api/documents/{document_id}/signatures/verify")

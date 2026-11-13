@@ -38,3 +38,7 @@ Folio is free to use. Optional donations support development.
 ## License
 
 AGPL-3.0-only. The full license text is in `LICENSE`. Third-party dependencies retain their respective licenses.
+
+Appearance follows your system by default. Choose Light, Dark, or System in More actions > Appearance; the preference stays on this browser. PDF pages retain their original colors.
+
+The local Library keeps document names, folders, favorites and immutable revision history. Reopen or restore an earlier revision; this browser also remembers the last document, page and zoom. Documents remain in the local service data directory.
