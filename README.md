@@ -2,6 +2,8 @@
 
 A free, open-source PDF workspace with a quiet interface and local document processing.
 
+[Website](https://folio-pdf.clark719664.chatgpt.site) · [Windows download](https://github.com/clark719664/Folio/releases/tag/v0.1.0) · [Website source](website/)
+
 ## Windows standalone app
 
 Download the Windows ZIP from this project's GitHub Releases, extract the whole folder, and open **Folio.exe**. Keep its `_internal` folder alongside the executable. The package includes the Python backend and built interface; running it does not require Python or Node.js. The native window uses Microsoft's free Edge WebView2 Runtime, normally available on Windows 10/11. If it is missing, run the included `Install-WebView2.cmd`.
