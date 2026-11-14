@@ -1,0 +1,21 @@
+Folio for Windows
+
+Extract the entire ZIP to a folder, then open Folio.exe.
+Keep Folio.exe and its _internal folder together. Python and Node.js are bundled
+or unnecessary at runtime; you do not need to install them.
+
+Your PDFs and library are saved in %LOCALAPPDATA%\Folio\data.
+The desktop app only listens on this computer's loopback interface.
+Closing the Folio window also closes its local PDF service.
+
+Optional: run Install-LibreOffice.cmd for Word, Excel, PowerPoint and OpenDocument
+conversion. This downloads the free LibreOffice application using winget.
+The app lists Office formats as unavailable until LibreOffice is installed.
+
+If the native window cannot open because WebView2 is absent, run
+Install-WebView2.cmd to install Microsoft's free WebView2 runtime.
+
+This initial release is unsigned; Windows may show its usual unrecognized-app
+notice. Download only from the project's release page and compare SHA256SUMS.txt.
+
+License: GNU AGPL v3. See LICENSE and THIRD-PARTY-LICENSES.txt.

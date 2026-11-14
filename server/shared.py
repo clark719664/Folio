@@ -134,6 +134,18 @@ def workspace_owner(connection, user_id):
     return row is not None and row[0] == user_id
 
 
+def public_mode():
+    return os.environ.get("FOLIO_PUBLIC", "0") == "1"
+
+
+def bootstrap_guard(connection, request):
+    if public_mode() and not connection.execute("SELECT 1 FROM users LIMIT 1").fetchone():
+        expected = os.environ.get("FOLIO_BOOTSTRAP_TOKEN", "")
+        supplied = request.headers.get("x-folio-bootstrap", "")
+        if len(expected) < 32 or not hmac.compare_digest(expected, supplied):
+            raise HTTPException(403, "The server owner must initialize this workspace")
+
+
 def access(connection, document_id, user_id, minimum="viewer"):
     row = connection.execute("SELECT d.*,m.role FROM documents d JOIN members m ON d.id=m.document_id WHERE d.id=? AND m.user_id=?", (document_id, user_id)).fetchone()
     if row is None:
@@ -185,9 +197,9 @@ def register(app, root_getter, location, apply_edit, Edit, checked_page, checked
             try:
                 origin_guard(request)
                 local_route = not request.url.path.startswith(("/api/auth/", "/api/shared")) and request.url.path != "/api/health"
-                if local_route and (Path(root_getter()) / "shared" / "shared.sqlite3").exists():
+                if local_route and (public_mode() or (Path(root_getter()) / "shared" / "shared.sqlite3").exists()):
                     with database(root_getter()) as connection:
-                        if connection.execute("SELECT 1 FROM users LIMIT 1").fetchone():
+                        if public_mode() or connection.execute("SELECT 1 FROM users LIMIT 1").fetchone():
                             user = identity(connection, request)
                             if not workspace_owner(connection, user["id"]):
                                 raise HTTPException(403, "Only the workspace owner can access local files. Open Shared documents instead.")
@@ -204,6 +216,7 @@ def register(app, root_getter, location, apply_edit, Edit, checked_page, checked
         with database(root_getter()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             if signup:
+                bootstrap_guard(connection, request)
                 salt = secrets.token_bytes(16)
                 try:
                     connection.execute("INSERT INTO users VALUES(?,?,?,?,?)", (uuid.uuid4().hex, username, credentials.displayName.strip() or username, salt, password_hash(credentials.password, salt)))
@@ -224,7 +237,7 @@ def register(app, root_getter, location, apply_edit, Edit, checked_page, checked
             token = secrets.token_urlsafe(32)
             connection.execute("INSERT INTO sessions VALUES(?,?,?)", (digest(token), user["id"], time.time() + 7 * 86400))
             response = JSONResponse({"user": {"id": user["id"], "username": username, "displayName": user["display_name"], "workspaceOwner": workspace_owner(connection, user["id"])}})
-            response.set_cookie(COOKIE, token, httponly=True, secure=request.url.scheme == "https", samesite="strict", max_age=7 * 86400, path="/api")
+            response.set_cookie(COOKIE, token, httponly=True, secure=public_mode() or request.url.scheme == "https", samesite="strict", max_age=7 * 86400, path="/api")
             return response
 
     @app.post("/api/auth/signup")

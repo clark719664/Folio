@@ -2,6 +2,16 @@
 
 A free, open-source PDF workspace with a quiet interface and local document processing.
 
+## Windows standalone app
+
+Download the Windows ZIP from this project's GitHub Releases, extract the whole folder, and open **Folio.exe**. Keep its `_internal` folder alongside the executable. The package includes the Python backend and built interface; running it does not require Python or Node.js. The native window uses Microsoft's free Edge WebView2 Runtime, normally available on Windows 10/11. If it is missing, run the included `Install-WebView2.cmd`.
+
+Documents and the Library are stored in `%LOCALAPPDATA%\Folio\data`. Closing the native window stops its local service, which listens only on this computer. For Office document conversion, run the optional `Install-LibreOffice.cmd`; it explains and starts the free LibreOffice installation through winget. Reopen Folio afterward. Neither optional installer runs automatically.
+
+Initial Windows builds are unsigned. Download from the project's release page and compare the ZIP with the release's `SHA256SUMS.txt`. Windows may display its usual unrecognized-app notice.
+
+To build the Windows package from source, install the development requirements below, then run `server/.venv/Scripts/python.exe -m pip install -r desktop/requirements-build.txt` and `./scripts/build-windows.ps1`. The ZIP and checksum are written to `release/`. Verify the built executable with `Folio.exe --smoke-test --result <path-to-json>`; `--smoke-window` additionally opens, checks, and closes the native window. Both smoke modes use temporary document storage instead of your Library.
+
 ## Development
 
 Requires Node.js 20.19+ and Python 3.11+.

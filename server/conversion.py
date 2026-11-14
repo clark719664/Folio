@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 from html.parser import HTMLParser
 
 import fitz
@@ -20,6 +21,7 @@ REFLOW = {"epub", "xps", "oxps", "cbz", "svg"}
 OFFICE = {"doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "csv"}
 TEXT = {"txt", "md", "markdown", "html", "htm"}
 MAX_BYTES = 100 * 1024 * 1024
+CONVERSION_SLOTS = threading.BoundedSemaphore(max(1, min(4, int(os.environ.get("FOLIO_CONVERSION_WORKERS", "2")))))
 
 
 def office_executable():
@@ -119,6 +121,15 @@ def convert_office(data, extension):
 
 
 def convert_bytes(data, extension):
+    if not CONVERSION_SLOTS.acquire(blocking=False):
+        raise ValueError("Conversion workers are busy. Try again after the current conversions finish.")
+    try:
+        return _convert_bytes(data, extension)
+    finally:
+        CONVERSION_SLOTS.release()
+
+
+def _convert_bytes(data, extension):
     extension = extension.lower()
     if not data:
         raise ValueError("The file is empty.")

@@ -432,3 +432,9 @@ try:
 except ImportError:
     from conversion import register as register_conversion
 register_conversion(app, persist, LOCK)
+
+try:
+    from .static_site import register as register_static
+except ImportError:
+    from static_site import register as register_static
+register_static(app)
