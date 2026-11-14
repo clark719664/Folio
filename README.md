@@ -2,7 +2,17 @@
 
 A free, open-source PDF workspace with a quiet interface and local document processing.
 
-[Website](https://folio-pdf.clark719664.chatgpt.site) · [Windows download](https://github.com/clark719664/Folio/releases/tag/v0.1.0) · [Website source](website/)
+[Website](https://folio-pdf.clark719664.chatgpt.site) · [Web app](https://folio-pdf.clark719664.chatgpt.site/app/) · [Windows and Linux downloads](https://github.com/clark719664/Folio/releases/tag/v0.1.1) · [Website source](website/)
+
+## Browser app
+
+The [browser app](browser/) edits PDFs locally: page organization, merge/extract, added text, drawing, highlights, signatures, form filling, metadata, PNG export, undo/redo, and downloads. Images and plain text convert locally. Office conversion explicitly uploads the selected file to an isolated conversion service, with a 25 MiB limit. Files are removed after processing. Supported formats are DOC/DOCX, XLS/XLSX, PPT/PPTX, ODT/ODS/ODP and RTF. Busy requests receive a retry message. Existing text replacement, OCR, redaction and shared workspaces remain desktop/server features; the public browser app does not yet offer online collaboration.
+
+Build with `npm ci` and `npm run build` inside `browser/`. Deploy its `dist/` at `/app/`. `public/backend.json` selects the conversion endpoint. Hosting source and isolation/resource limits are documented in [hosting/](hosting/).
+
+## Linux standalone app
+
+Extract the Linux x64 tarball from Releases and run `./Folio`. It opens the app in your browser and runs a loopback-only local service. Requires glibc 2.35+; Python and Node are bundled/not required. LibreOffice and Tesseract are optional system packages for Office conversion and OCR. The included Linux guide covers installation. Build with `scripts/build-linux.sh`. The release workflow verifies the packaged executable and real Word, Excel and PowerPoint conversion on Ubuntu.
 
 ## Windows standalone app
 
@@ -43,7 +53,7 @@ Choose **Convert files to PDF** on the opening screen, or **Convert to PDF** in 
 
 Built-in conversion accepts common images (including multi-page TIFF and animated GIF frames), PDF, SVG, EPUB, XPS/OXPS, CBZ, plain text, basic Markdown, and HTML text. HTML conversion preserves text/basic structure and removes scripts, images, styles, and external resources; it does not reproduce a web page's layout. Markdown supports headings and plain body text rather than full Markdown rendering. SVG input must be self-contained.
 
-Word, Excel, PowerPoint, OpenDocument, RTF, and CSV conversion requires a separately installed **LibreOffice**. If automatic detection fails, set `FOLIO_LIBREOFFICE` to the LibreOffice executable before starting the server. The interface reports actual engine availability instead of offering unavailable formats. Office font substitutions can change layout, and password-protected inputs must be unlocked first. LibreOffice installation is currently pending on the development workstation; Office conversion has **not yet been verified there**. Native image/text conversion, ordered combining, partial failures, download/open, and the dark/mobile interface have passed browser checks.
+Word, Excel, PowerPoint, OpenDocument, and RTF conversion requires a separately installed **LibreOffice**. If automatic detection fails, set `FOLIO_LIBREOFFICE` to the LibreOffice executable before starting the server. The interface reports actual engine availability instead of offering unavailable formats. Office font substitutions can change layout, and password-protected inputs must be unlocked first. CSV and TSV convert natively without LibreOffice. Real DOCX, XLSX and PPTX conversions have passed in Linux CI and through the isolated public service. LibreOffice installation is still pending on the Windows development workstation. Native image/text conversion, ordered combining, partial failures, download/open, and the dark/mobile interface have passed browser checks.
 
 ## Verification
 

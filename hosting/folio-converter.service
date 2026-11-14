@@ -1,0 +1,32 @@
+[Unit]
+Description=Folio isolated anonymous document converter
+After=network.target
+
+[Service]
+Type=simple
+User=folio
+Group=folio
+WorkingDirectory=/opt/folio-converter
+ExecStart=/opt/folio-converter/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8091 --workers 1 --no-proxy-headers --limit-concurrency 8 --timeout-keep-alive 5 --no-access-log
+Restart=on-failure
+RestartSec=5
+MemoryHigh=1536M
+MemoryMax=2G
+MemorySwapMax=0
+TasksMax=128
+LimitFSIZE=52428800
+UMask=0077
+ProtectHome=yes
+ProtectSystem=strict
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+# Do not mask the parent /proc: that prevents bwrap mounting its private PID namespace procfs.
+# The converter sandbox has no host /sys or /proc and no host-network access.
+ProtectControlGroups=yes
+LockPersonality=yes
+# Bubblewrap needs unprivileged user/mount/PID/network namespaces. Do not disable them.
+# Normal CPU and IO priority. Resource admission/monitoring preserves other apps.
+
+[Install]
+WantedBy=multi-user.target

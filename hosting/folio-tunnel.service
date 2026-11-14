@@ -1,0 +1,22 @@
+[Unit]
+Description=Folio private Cloudflare connector
+After=network-online.target folio-converter.service
+Wants=network-online.target
+
+[Service]
+User=folio
+Group=folio
+LoadCredential=token:/etc/folio-converter/tunnel-token
+ExecStart=/usr/local/bin/folio-cloudflared tunnel --no-autoupdate run --token-file %d/token
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+PrivateTmp=yes
+MemoryMax=192M
+TasksMax=64
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

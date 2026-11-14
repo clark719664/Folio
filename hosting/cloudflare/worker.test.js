@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import worker from './worker.js';
+const origin = 'https://folio-pdf.clark719664.chatgpt.site';
+let calls = 0;
+const env = { CONVERTER: { async fetch(request) {
+  calls++;
+  assert.equal(request.redirect, 'manual');
+  assert.equal(new URL(request.url).host, '127.0.0.1:8091');
+  assert.equal(request.headers.get('Authorization'), null);
+  assert.equal(request.headers.get('X-Forwarded-For'), null);
+  return Response.json({status:'ok'});
+}}};
+const request = (path, init) => new Request('https://folio.example'+path,init);
+assert.equal((await worker.fetch(request('/health',{headers:{Origin:origin,Authorization:'private','X-Forwarded-For':'spoof'}}),env)).status,200);
+assert.equal(calls,1);
+assert.equal((await worker.fetch(request('/api/library'),env)).status,404);
+assert.equal((await worker.fetch(request('/health?url=http://elsewhere'),env)).status,404);
+assert.equal((await worker.fetch(request('/health',{headers:{Origin:'https://elsewhere.example'}}),env)).status,403);
+assert.equal((await worker.fetch(request('/convert',{method:'OPTIONS',headers:{Origin:origin}}),env)).status,204);
+assert.equal(calls,1);
+const redirected = await worker.fetch(request('/health'),{CONVERTER:{fetch:async()=>new Response(null,{status:302,headers:{Location:'http://elsewhere'}})}});
+assert.equal(redirected.status,503);
+assert.equal(redirected.headers.get('Location'),null);
+console.log('PASS: fixed upstream, redirect protection, route allowlist, CORS, stripped forwarding and authorization headers');

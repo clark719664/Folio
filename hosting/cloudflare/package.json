@@ -1,0 +1,1 @@
+{"name":"folio-conversion-gateway","private":true,"type":"module","scripts":{"build":"vite build","deploy":"cf deploy"},"devDependencies":{"cf":"^0.15.0","@cloudflare/vite-plugin":"beta","vite":"^7.0.0","typescript":"^5.7.0"}}
