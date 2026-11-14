@@ -138,7 +138,8 @@ export default function App() {
   const [panel, setPanel] = useState<
       "none" | "document" | "extract" | "forms" | "search"
     >("none"),
-    [sidebar, setSidebar] = useState(true);
+    [sidebar, setSidebar] = useState(() => window.innerWidth > 650);
+  const [moreTools, setMoreTools] = useState(false);
   const [range, setRange] = useState("1"),
     [formFields, setFormFields] = useState<Field[]>([]),
     [title, setTitle] = useState(""),
@@ -569,15 +570,16 @@ export default function App() {
             <FolderOpen size={16} />
             <span>Open</span>
           </button>
-          <button className="primary" onClick={save} disabled={!bytes || busy}>
+          <button className="primary save-button" aria-label="Download PDF" onClick={save} disabled={!bytes || busy}>
             <Download size={16} />
             <span>Download PDF</span>
+            <span className="mobile-save">Save</span>
           </button>
         </div>
       </header>
       {bytes && (
-        <nav className="toolbar" aria-label="PDF tools">
-          <div className="tool-group">
+        <nav className={`toolbar${moreTools ? " expanded" : ""}`} aria-label="PDF tools">
+          <div className="tool-group history-tools">
             <Button
               title="Toggle pages"
               onClick={() => setSidebar(!sidebar)}
@@ -596,7 +598,7 @@ export default function App() {
               <Redo2 />
             </Button>
           </div>
-          <div className="tool-group">
+          <div className="tool-group edit-tools">
             {(
               [
                 ["select", MousePointer2, "View"],
@@ -609,8 +611,12 @@ export default function App() {
                 key={id}
                 disabled={busy}
                 className={tool === id ? "active" : ""}
+                aria-pressed={tool === id}
                 onClick={() => {
                   setTool(id);
+                  setMoreTools(false);
+                  setPanel("none");
+                  if (window.innerWidth <= 650) setSidebar(false);
                   if (id === "highlight") setColor("#f4c94f");
                   else setColor("#202020");
                 }}
@@ -620,7 +626,10 @@ export default function App() {
               </button>
             ))}
           </div>
-          <div className="tool-group">
+          <button className="more-tools" aria-expanded={moreTools} aria-controls="additional-tools" onClick={() => setMoreTools(!moreTools)}>
+            <Settings2 size={16} />{moreTools ? "Less" : "More tools"}
+          </button>
+          <div className="tool-group additional-tools" id="additional-tools">
             <button disabled={busy} onClick={() => mergeInput.current?.click()}>
               <FilePlus2 size={16} />
               Add files
@@ -684,10 +693,15 @@ export default function App() {
         <>
           {tool !== "select" && (
             <div className="annotation-bar">
+              <p className="editing-hint" role="status">
+                {tool === "text" ? (text.trim() ? "Tap the page to place your text." : "Type your text, then tap the page to place it.") : tool === "ink" ? "Draw or sign with your finger. Tap Done to scroll." : "Drag your finger over an area. Tap Done to scroll."}
+              </p>
               {tool === "text" ? (
                 <input
                   aria-label="Text to add"
-                  placeholder="Text to add — then click the page"
+                  placeholder="Type your text"
+                  enterKeyHint="done"
+                  onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                 />
@@ -720,6 +734,7 @@ export default function App() {
               <button onClick={() => setTool("select")}>Done</button>
             </div>
           )}
+          {tool === "select" && <p className="mobile-edit-hint">Choose a tool to edit. Save downloads your PDF.</p>}
           <div className="workspace">
             {sidebar && (
               <aside className="pages">

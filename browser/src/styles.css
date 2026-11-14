@@ -763,3 +763,30 @@ footer > span {
     white-space: normal;
   }
 }
+/* Keep the main editing actions visible and touch-sized on phones. */
+.more-tools, .mobile-save, .mobile-edit-hint, .editing-hint { display: none; }
+@media (max-width: 650px) {
+  .topbar { flex-wrap: wrap; height: auto; min-height: 60px; padding: 9px 12px; gap: 6px; }
+  .document-name { flex: 1; min-width: 0; }
+  .top-actions { gap: 3px; }
+  .top-actions .save-button .mobile-save { display: inline; }
+  .top-actions .save-button { min-height: 44px; gap: 5px; }
+  .toolbar { flex-wrap: wrap; overflow: visible; gap: 4px; padding: 6px 10px; }
+  .toolbar .edit-tools { order: -1; flex: 0 0 100%; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); padding: 0; border: 0; }
+  .edit-tools button { min-width: 0; min-height: 52px; padding: 6px 2px; flex-direction: column; gap: 4px; font-size: 12px; }
+  .toolbar .history-tools { flex: 1; }
+  .toolbar .history-tools button { width: 44px; min-width: 44px; height: 44px; }
+  .more-tools { display: inline-flex; min-height: 44px; }
+  .toolbar .additional-tools { display: none; border: 0; padding: 0; }
+  .toolbar.expanded .additional-tools { display: flex; flex-wrap: wrap; flex-basis: 100%; border-top: 1px solid var(--line); padding-top: 5px; }
+  .additional-tools button { min-height: 44px; }
+  .mobile-edit-hint { display: block; margin: 0; padding: 8px 12px; font-size: 12px; color: var(--muted); background: var(--surface); }
+  .annotation-bar { flex-wrap: wrap; overflow: visible; padding: 8px 12px; gap: 8px; }
+  .annotation-bar .editing-hint { display: block; flex: 0 0 100%; margin: 0; line-height: 1.4; }
+  .annotation-bar > span { display: none; }
+  .annotation-bar > input[aria-label="Text to add"] { width: 100%; min-width: 0; flex: 0 0 100%; font-size: 16px; min-height: 44px; }
+  .annotation-bar input[type="number"] { font-size: 16px; min-height: 44px; }
+  .annotation-bar input[type="color"] { width: 44px; height: 44px; }
+  .annotation-bar > button { margin-left: auto; min-height: 44px; padding: 8px 16px; border: 1px solid var(--line); }
+  .inspector { top: 190px; }
+}
