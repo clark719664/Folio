@@ -1,4 +1,5 @@
 import SharedWorkspace from "./SharedWorkspace";
+import ConvertToPdf from "./ConvertToPdf";
 import TextLayer from "./TextLayer";
 import { useAppearance } from "./appearance";
 import { useDialog } from "./useDialog";
@@ -156,6 +157,7 @@ export default function App() {
   const [appearance, setAppearance] = useAppearance();
   const [advanced, setAdvanced] = useState(false);
   const [library, setLibrary] = useState(false);
+  const [conversion, setConversion] = useState(false);
   const [shared, setShared] = useState(() => new URLSearchParams(location.search).has("invite"));
   const [modal, setModal] = useState<
     "properties" | "password" | "unlock" | "export" | null
@@ -293,7 +295,7 @@ export default function App() {
   }, [notice]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (document.querySelector(".shared-workspace")) return;
+      if (document.querySelector(".shared-workspace, .conversion-dialog")) return;
       if ((e.ctrlKey || e.metaKey) && e.key === "o") {
         e.preventDefault();
         input.current?.click();
@@ -519,7 +521,7 @@ export default function App() {
   }
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
-      if (document.querySelector(".shared-workspace")) return;
+      if (document.querySelector(".shared-workspace, .conversion-dialog")) return;
       if (!doc || busy) return;
       const editable =
         event.target instanceof HTMLInputElement ||
@@ -759,6 +761,7 @@ export default function App() {
                   <FolderOpen size={16} />
                   Open PDF<kbd>Ctrl O</kbd>
                 </button>
+                <button onClick={() => setConversion(true)}><FilePlus2 size={16}/>Convert to PDF</button>
                 {doc && (
                   <>
                     <button onClick={() => mergeInput.current?.click()}>
@@ -978,6 +981,7 @@ export default function App() {
                 Open PDF
               </button>
               <p>or drop a file here</p>
+              <button className="convert-welcome" onClick={() => setConversion(true)}>Convert files to PDF</button>
               <div className="welcome-footer">
                 <span>Free & open source</span>
                 <span className="tiny-dot" />
@@ -1250,6 +1254,7 @@ export default function App() {
           onMetadataChanged={refreshDocumentMetadata}
         />
       )}
+      {conversion && <ConvertToPdf onClose={() => setConversion(false)} onOpen={next => { accept(next); setPageIndex(0); setConversion(false); }} />}
       {advanced && doc && (
         <AdvancedTools
           document={doc}
@@ -1257,6 +1262,7 @@ export default function App() {
           rect={selected?.bbox}
           onChange={accept}
           onPageChange={setPageIndex}
+          onConvert={() => { setAdvanced(false); setConversion(true); }}
           onClose={() => setAdvanced(false)}
         />
       )}

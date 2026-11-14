@@ -46,8 +46,10 @@ type Props = {
   onClose: () => void;
   onChange: (doc: DocumentInfo) => void;
   onPageChange: (page: number) => void;
+  onConvert: () => void;
 };
 const items = [
+  { id: "convert-to-pdf", label: "Convert to PDF", description: "Images, documents and other files into PDFs", icon: FileText },
   {
     id: "production",
     label: "Print production",
@@ -269,6 +271,7 @@ export default function AdvancedTools({
   onClose,
   onChange,
   onPageChange,
+  onConvert,
 }: Props) {
   useDialog(true, onClose);
   const [view, setView] = useState("");
@@ -516,7 +519,7 @@ export default function AdvancedTools({
                   .includes(toolQuery.trim().toLowerCase()),
               )
               .map((item) => (
-                <button key={item.id} onClick={() => setView(item.id)}>
+                <button key={item.id} onClick={() => item.id === "convert-to-pdf" ? onConvert() : setView(item.id)}>
                   <item.icon size={20} />
                   <span>
                     <b>{item.label}</b>

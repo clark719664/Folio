@@ -25,6 +25,14 @@ Text replacement uses Helvetica for Latin-1 and fallback fonts with shaping for 
 
 The release focuses on a polished, free PDF viewer and editor: reading, selection, editing, annotation, page organization, forms, conversion and document sharing. AI and Studio workflows are outside its scope. Capabilities and limitations are documented here and in `server/API.md`.
 
+### Convert files to PDF
+
+Choose **Convert files to PDF** on the opening screen, or **Convert to PDF** in More actions or Tools. Add several files, reorder or remove them, and create separate PDFs or one combined PDF in queue order. Successful files remain available when another file fails; results can be opened, downloaded, and found in the Library. Conversion runs on your Folio server without a commercial conversion service.
+
+Built-in conversion accepts common images (including multi-page TIFF and animated GIF frames), PDF, SVG, EPUB, XPS/OXPS, CBZ, plain text, basic Markdown, and HTML text. HTML conversion preserves text/basic structure and removes scripts, images, styles, and external resources; it does not reproduce a web page's layout. Markdown supports headings and plain body text rather than full Markdown rendering. SVG input must be self-contained.
+
+Word, Excel, PowerPoint, OpenDocument, RTF, and CSV conversion requires a separately installed **LibreOffice**. If automatic detection fails, set `FOLIO_LIBREOFFICE` to the LibreOffice executable before starting the server. The interface reports actual engine availability instead of offering unavailable formats. Office font substitutions can change layout, and password-protected inputs must be unlocked first. LibreOffice installation is currently pending on the development workstation; Office conversion has **not yet been verified there**. Native image/text conversion, ordered combining, partial failures, download/open, and the dark/mobile interface have passed browser checks.
+
 ## Verification
 
 `npm run build` typechecks and builds the interface. Run the backend tests with the virtual environment's Python and `-m pytest server -q`. Browser regression scripts under `tests/browser*.cjs` cover edits/export/reopen, forms, bookmarks, signatures, comments, measurements and accessibility. Their current Playwright/Chromium paths are specific to the development workstation and must be configured before running on another machine. Browser tests default to `http://127.0.0.1:4320`; set `FOLIO_URL` to the actual development server URL.

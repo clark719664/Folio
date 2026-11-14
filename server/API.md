@@ -167,3 +167,13 @@ Accounts and shared revision bytes persist in `shared/shared.sqlite3`, separate 
 - `POST /api/shared/{id}/presence` `{page}` returns members seen within 60 seconds. Presence is informational; all writes still require permission and version checks.
 
 Advanced local export and production tools remain local workspace operations. Shared discussion threads live in the collaboration database and are not embedded in downloaded PDF files. Public deployment is not configured by the local launcher.
+
+## Convert files to PDF
+
+`GET /api/conversion/formats` returns format groups (`extensions,label,available,engine`), `officeAvailable`, and readable fidelity/resource-policy `notes`. LibreOffice discovery checks `FOLIO_LIBREOFFICE`, PATH and standard Windows install locations.
+
+`POST /api/convert` accepts multipart `files` (repeated, ordered) and `mode` (`separate` or `combine`). It returns `{mode,documents,results}`. Each result contains `name,status` and either `pages` or `error`. Each successful document uses the normal library descriptor. Separate mode saves each success; combine mode saves successful inputs in submitted order and preserves per-file failures. Up to 40 files, 100 MB each and 200 MB per batch are accepted.
+
+Native conversion supports PDF; PNG/JPEG/WebP/TIFF/BMP/GIF/ICO (all frames, EXIF orientation, white transparency background); SVG/EPUB/XPS/OXPS/CBZ; UTF-8 TXT/basic Markdown/HTML text. HTML excludes scripts, styling, images and external resources. Markdown supports headings and plain body text. SVG external references and XML entities are rejected. These are document conversions, not browser screenshots.
+
+DOC/DOCX/XLS/XLSX/PPT/PPTX/ODT/ODS/ODP/RTF/CSV use a separately installed LibreOffice executable. Each job uses a unique temporary profile, restrictive macro security, disabled document update mode and a 90-second process timeout. Conversion uses argument arrays without a shell. Password-protected files must be unlocked first; fonts and layout may differ from their original applications. LibreOffice runs locally and is not an OS sandbox for hostile Office files.

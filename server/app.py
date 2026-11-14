@@ -426,3 +426,9 @@ try:
 except ImportError:
     from shared import register as register_shared
 register_shared(app, lambda: ROOT, location, apply_edit, Edit, checked_page, checked_rect, LOCK)
+
+try:
+    from .conversion import register as register_conversion
+except ImportError:
+    from conversion import register as register_conversion
+register_conversion(app, persist, LOCK)
