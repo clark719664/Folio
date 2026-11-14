@@ -49,6 +49,9 @@ export default function ConvertToPdf({
   const [mode, setMode] = useState("separate"),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [paper, setPaper] = useState("original");
+  const [orientation, setOrientation] = useState("portrait");
+  const [margin, setMargin] = useState("0");
   const [result, setResult] = useState<Conversion | null>(null),
     [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null),
@@ -107,6 +110,9 @@ export default function ConvertToPdf({
       const body = new FormData();
       for (const item of files) body.append("files", item.file);
       body.append("mode", mode);
+      body.append("paper", paper);
+      body.append("orientation", orientation);
+      body.append("margin", margin);
       const response = await fetch("/api/convert", { method: "POST", body });
       const data = await response.json();
       if (!response.ok)
@@ -240,6 +246,20 @@ export default function ConvertToPdf({
           )}
           {files.length > 0 && (
             <>
+              {files.some(({file}) => /\.(png|jpe?g|webp|tiff?|bmp|gif|ico)$/i.test(file.name)) && (
+                <fieldset className="conversion-image-options" disabled={busy}>
+                  <legend>Image pages</legend>
+                  <label>Paper size<select value={paper} onChange={e => { setPaper(e.target.value); setResult(null); }}>
+                    <option value="original">Image size</option><option value="a4">A4</option><option value="letter">US Letter</option>
+                  </select></label>
+                  {paper !== "original" && <label>Orientation<select value={orientation} onChange={e => { setOrientation(e.target.value); setResult(null); }}>
+                    <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
+                  </select></label>}
+                  <label>Margins<select value={margin} onChange={e => { setMargin(e.target.value); setResult(null); }}>
+                    <option value="0">None</option><option value="18">¼ inch</option><option value="36">½ inch</option><option value="72">1 inch</option>
+                  </select></label>
+                </fieldset>
+              )}
               <div className="conversion-queue-heading">
                 <h3>
                   {files.length} {files.length === 1 ? "file" : "files"}

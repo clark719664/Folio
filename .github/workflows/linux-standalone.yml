@@ -1,0 +1,74 @@
+name: Linux standalone
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Archive version
+        required: true
+        default: '0.1.0'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install conversion engines
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libreoffice tesseract-ocr tesseract-ocr-eng fonts-dejavu-core fonts-liberation
+          libreoffice --version
+          tesseract --version
+      - name: Install build dependencies
+        run: |
+          python -m pip install -r server/requirements.txt 'pyinstaller>=6.11,<7'
+          npm ci
+      - name: Verify real Office engine and backend
+        run: |
+          python -c 'from server.conversion import office_executable; assert office_executable(), "LibreOffice missing"'
+          python -m pytest server -q -ra --junitxml=release/backend-tests.xml
+          python -c 'import xml.etree.ElementTree as ET; cases=[c for c in ET.parse("release/backend-tests.xml").iter("testcase") if c.get("name") == "test_real_office_docx_xlsx_pptx"]; assert len(cases) == 1 and len(cases[0]) == 0, "Real Office conversion test missing, skipped, or failed"'
+      - name: Build Linux archive
+        env:
+          BUILD_VERSION: ${{ inputs.version }}
+          PYTHON: python
+        run: bash scripts/build-linux.sh "$BUILD_VERSION"
+      - name: Smoke test extracted standalone archive
+        env:
+          BUILD_VERSION: ${{ inputs.version }}
+        run: |
+          python scripts/create-office-smoke-fixtures.py /tmp/folio-office-fixtures
+          mkdir -p /tmp/folio-extracted
+          tar -xzf "release/Folio-$BUILD_VERSION-Linux-x64.tar.gz" -C /tmp/folio-extracted
+          cd /tmp/folio-extracted/Folio
+          timeout 180 ./Folio --smoke-test --office-fixtures /tmp/folio-office-fixtures --result "$GITHUB_WORKSPACE/release/linux-smoke.json"
+          python -c 'import json, os; from pathlib import Path; r=json.loads((Path(os.environ["GITHUB_WORKSPACE"])/"release/linux-smoke.json").read_text()); assert r["ok"] and r["frozen"] and r["officeAvailable"] and r["officeConversions"] == ["docx", "xlsx", "pptx"], r; print(r)'
+      - name: Upload standalone archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: Folio-Linux-x64
+          if-no-files-found: error
+          path: |
+            release/Folio-*-Linux-x64.tar.gz
+            release/SHA256SUMS-Linux.txt
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Linux-test-evidence
+          path: |
+            release/backend-tests.xml
+            release/linux-smoke.json

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import csv
 import io
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+from typing import Annotated
 from html.parser import HTMLParser
 
 import fitz
@@ -18,8 +20,8 @@ from PIL import Image, ImageOps, ImageSequence
 
 IMAGES = {"png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp", "gif", "ico"}
 REFLOW = {"epub", "xps", "oxps", "cbz", "svg"}
-OFFICE = {"doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "csv"}
-TEXT = {"txt", "md", "markdown", "html", "htm"}
+OFFICE = {"doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf"}
+TEXT = {"txt", "md", "markdown", "html", "htm", "csv", "tsv"}
 MAX_BYTES = 100 * 1024 * 1024
 CONVERSION_SLOTS = threading.BoundedSemaphore(max(1, min(4, int(os.environ.get("FOLIO_CONVERSION_WORKERS", "2")))))
 
@@ -63,6 +65,14 @@ def text_html(data, extension):
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError as error:
         raise ValueError("Save text as UTF-8 before converting.") from error
+    if extension in {"csv", "tsv"}:
+        rows = csv.reader(io.StringIO(text, newline=""), delimiter="\t" if extension == "tsv" else ",")
+        parts = ['<table style="border-collapse:collapse;width:100%">']
+        for index, row in enumerate(rows):
+            if index >= 10000 or len(row) > 100:
+                raise ValueError("Tables are limited to 10,000 rows and 100 columns. Split this file before converting.")
+            parts.append('<tr>' + ''.join('<td style="border:1px solid #bbb;padding:4px">' + html.escape(cell).replace('\n', '<br>') + '</td>' for cell in row) + '</tr>')
+        return ''.join(parts) + '</table>'
     if extension in {"html", "htm"}:
         parser = SafeHTML()
         parser.feed(text)
@@ -120,16 +130,22 @@ def convert_office(data, extension):
         return target.read_bytes()
 
 
-def convert_bytes(data, extension):
+def convert_bytes(data, extension, *, paper="original", orientation="portrait", margin=0):
+    if paper not in {"original", "a4", "letter"}:
+        raise ValueError("Choose a supported paper size.")
+    if orientation not in {"portrait", "landscape"}:
+        raise ValueError("Choose portrait or landscape orientation.")
+    if not 0 <= margin <= 144:
+        raise ValueError("Image margin must be between 0 and 144 points.")
     if not CONVERSION_SLOTS.acquire(blocking=False):
         raise ValueError("Conversion workers are busy. Try again after the current conversions finish.")
     try:
-        return _convert_bytes(data, extension)
+        return _convert_bytes(data, extension, paper, orientation, margin)
     finally:
         CONVERSION_SLOTS.release()
 
 
-def _convert_bytes(data, extension):
+def _convert_bytes(data, extension, paper="original", orientation="portrait", margin=0):
     extension = extension.lower()
     if not data:
         raise ValueError("The file is empty.")
@@ -154,8 +170,15 @@ def _convert_bytes(data, extension):
                     image = io.BytesIO()
                     white.convert("RGB").save(image, format="PNG")
                     scale = min(1, 14400 / max(frame.size))
-                    page = output.new_page(width=frame.width * scale, height=frame.height * scale)
-                    page.insert_image(page.rect, stream=image.getvalue())
+                    width, height = frame.width * scale, frame.height * scale
+                    if paper != "original":
+                        width, height = (595, 842) if paper == "a4" else (612, 792)
+                        if orientation == "landscape":
+                            width, height = height, width
+                    else:
+                        width, height = width + 2 * margin, height + 2 * margin
+                    page = output.new_page(width=width, height=height)
+                    page.insert_image(fitz.Rect(margin, margin, width - margin, height - margin), stream=image.getvalue(), keep_proportion=True)
             return output.tobytes(garbage=4, deflate=True)
         finally:
             output.close()
@@ -181,11 +204,11 @@ def register(app, persist, lock):
         return {"officeAvailable": available, "notes": ["HTML preserves text and basic structure; scripts, images, styles and external resources are removed.", "Markdown supports headings and plain body text; advanced syntax is not rendered.", "Office layout can differ when original fonts are unavailable. Password-protected files must be unlocked first.", "SVG must be self-contained. Animated images become one PDF page per frame."], "formats": [
             {"extensions": sorted(IMAGES), "label": "Images and multi-page TIFF", "available": True, "engine": "Pillow"},
             {"extensions": sorted(REFLOW | {"pdf"}), "label": "PDF, ebooks and vector documents", "available": True, "engine": "MuPDF"},
-            {"extensions": sorted(TEXT), "label": "Text, basic Markdown and HTML text", "available": True, "engine": "MuPDF Story"},
+            {"extensions": sorted(TEXT), "label": "Text, CSV, TSV, basic Markdown and HTML text", "available": True, "engine": "MuPDF Story"},
             {"extensions": sorted(OFFICE), "label": "Office documents", "available": available, "engine": "LibreOffice"}]}
 
     @app.post("/api/convert")
-    def convert(files: list[UploadFile] = File(...), mode: str = Form("separate")):
+    def convert(files: list[UploadFile] = File(...), mode: str = Form("separate"), paper: Annotated[str, Form()] = "original", orientation: Annotated[str, Form()] = "portrait", margin: Annotated[float, Form()] = 0):
         if mode not in {"separate", "combine"}:
             raise HTTPException(422, "Mode must be separate or combine")
         if not 1 <= len(files) <= 40:
@@ -201,7 +224,7 @@ def register(app, persist, lock):
                     total += len(data)
                     if total > MAX_BYTES * 2:
                         raise ValueError("Batch exceeds 200 MB. Convert remaining files in another batch.")
-                    converted = convert_bytes(data, Path(name).suffix.lstrip("."))
+                    converted = convert_bytes(data, Path(name).suffix.lstrip("."), paper=paper, orientation=orientation, margin=margin)
                     with fitz.open(stream=converted, filetype="pdf") as document:
                         if len(document) == 0:
                             raise ValueError("No pages were produced.")

@@ -1,0 +1,31 @@
+Folio for Linux x64
+
+Extract the entire archive, open a terminal in its Folio folder, and run:
+  ./Folio
+
+Folio opens your default browser. If it does not open, copy the localhost
+address printed in the terminal into your browser. Keep the terminal open;
+Ctrl+C stops Folio. Closing the browser tab does not stop the local service.
+Python and Node.js are bundled/not needed at runtime. This is a browser-based
+Linux app, not a native WebView window. Keep the _internal folder beside Folio.
+
+Built on Ubuntu 22.04 x64; requires glibc 2.35 or newer. Other Linux
+distributions and ARM systems are not verified. Alpine/musl is unsupported.
+
+Office conversion requires LibreOffice installed on your system. OCR requires
+Tesseract and language data. On Ubuntu/Debian, install with:
+  sudo apt update
+  sudo apt install libreoffice tesseract-ocr tesseract-ocr-eng
+
+These external applications are not included in this archive. Folio runs
+without them, but their associated conversions/OCR will be unavailable.
+For a custom LibreOffice location, set FOLIO_LIBREOFFICE to the executable.
+Additional OCR languages need corresponding tesseract-ocr language packages.
+Office layout and fonts can differ from the original application's output;
+inspect converted PDFs. Not every file format or feature is supported.
+
+Data and desktop.log are stored under $XDG_DATA_HOME/Folio, or
+~/.local/share/Folio when XDG_DATA_HOME is unset. The service listens only on
+127.0.0.1. Documents are processed locally.
+
+Source and license: https://github.com/clark719664/Folio (AGPL-3.0-only).

@@ -242,3 +242,8 @@
     gap: 8px;
   }
 }
+
+.conversion-image-options { display:flex; flex-wrap:wrap; gap:12px; border:1px solid var(--border); border-radius:10px; padding:14px; margin:16px 0; }
+.conversion-image-options legend { padding:0 6px; font-size:13px; }
+.conversion-image-options label { display:grid; gap:6px; flex:1; min-width:110px; font-size:12px; }
+.conversion-image-options select { padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:inherit; font:inherit; }
